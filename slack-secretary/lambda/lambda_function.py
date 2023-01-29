@@ -14,9 +14,20 @@ from ask_sdk_core.handler_input import HandlerInput
 
 from ask_sdk_model import Response
 
+import json
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+SLOT_LOCATION = 'location'
+
+SESSION_LOCATION = 'location'
+SESSION_MESSAGE = 'message'
+SESSION_LAST_REQUEST = 'last-request'
+SESSION_GOAL = 'goal'
+
+MESSAGE_REQUEST = 'message-request'
+SEND_MESSAGE_GOAL = 'send-message'
 
 class LaunchRequestHandler(AbstractRequestHandler):
     """Handler for Skill Launch."""
@@ -59,7 +70,9 @@ class SendMessageIntentHandler(AbstractRequestHandler):
         return ask_utils.is_intent_name("SendMessageIntent")(handler_input)
     
     def handle(self, handler_input):
-        location = handler_input.request_envelope.request.intent.slots['location'].value
+        session_attr = handler_input.attributes_manager.session_attributes
+        location = handler_input.request_envelope.request.intent.slots[SLOT_LOCATION].value
+        session_attr[SESSION_GOAL] = SEND_MESSAGE_GOAL
         if location == None:
             speak_output = "Great! Where would you like to send a message?"
             return (
@@ -69,6 +82,8 @@ class SendMessageIntentHandler(AbstractRequestHandler):
                     .response
             )
         else:
+            session_attr[SESSION_LOCATION] = location
+            session_attr[SESSION_LAST_REQUEST] = MESSAGE_REQUEST
             speak_output = f"Alright! What would you like to say to {location}?"
             return (
                 handler_input.response_builder
@@ -77,6 +92,19 @@ class SendMessageIntentHandler(AbstractRequestHandler):
                     .response
             )
 
+class GetSessionIntent(AbstractRequestHandler):
+    def can_handle(self, handler_input):
+        return ask_utils.is_intent_name("GetSessionData")(handler_input)
+
+    def handle(self, handler_input):
+        session_attr = handler_input.attributes_manager.session_attributes
+        speak_output = json.dumps(session_attr)
+        return (
+            handler_input.response_builder
+                .speak(speak_output)
+                .ask(speak_output)
+                .response
+        )
 
 class HelpIntentHandler(AbstractRequestHandler):
     """Handler for Help Intent."""
@@ -200,6 +228,7 @@ sb.add_request_handler(CancelOrStopIntentHandler())
 sb.add_request_handler(FallbackIntentHandler())
 sb.add_request_handler(SessionEndedRequestHandler())
 sb.add_request_handler(SendMessageIntentHandler())
+sb.add_request_handler(GetSessionIntent())
 sb.add_request_handler(IntentReflectorHandler()) # make sure IntentReflectorHandler is last so it doesn't override your custom intent handlers
 
 sb.add_exception_handler(CatchAllExceptionHandler())
