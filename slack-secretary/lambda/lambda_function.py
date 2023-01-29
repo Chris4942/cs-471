@@ -28,6 +28,13 @@ SESSION_GOAL = 'goal'
 
 MESSAGE_REQUEST = 'message-request'
 SEND_MESSAGE_GOAL = 'send-message'
+SESSION_LAST_REQUEST_LOCATION = 'location'
+
+def slots_of(handler_input):
+    return handler_input.request_envelope.request.intent.slots
+
+def attributes_of(handler_input):
+    return handler_input.attributes_manager.session_attributes
 
 class LaunchRequestHandler(AbstractRequestHandler):
     """Handler for Skill Launch."""
@@ -74,6 +81,7 @@ class SendMessageIntentHandler(AbstractRequestHandler):
         location = handler_input.request_envelope.request.intent.slots[SLOT_LOCATION].value
         session_attr[SESSION_GOAL] = SEND_MESSAGE_GOAL
         if location == None:
+            session_attr[SESSION_LAST_REQUEST] = SESSION_LAST_REQUEST_LOCATION
             speak_output = "Great! Where would you like to send a message?"
             return (
                 handler_input.response_builder
@@ -91,6 +99,28 @@ class SendMessageIntentHandler(AbstractRequestHandler):
                     .ask(speak_output)
                     .response
             )
+
+class SendMessageLocationIntentHandler(AbstractRequestHandler):
+    def last_request_was_location(self, handler_input):
+        return handler_input.attributes_manager.session_attributes[SESSION_LAST_REQUEST] == SESSION_LAST_REQUEST_LOCATION
+
+
+    def can_handle(self, handler_input):
+        return self.last_request_was_location(handler_input) and ask_utils.is_intent_name("ProvideLocationIntent")(handler_input)
+
+    def handle(self, handler_input):
+        location = slots_of(handler_input)[SLOT_LOCATION].value
+        attributes_of(handler_input)[SESSION_LOCATION] = location
+
+        speak_output = f"What would you like to say to {location}?"
+
+        return (
+            handler_input.response_builder
+                .speak(speak_output)
+                .ask(speak_output)
+                .response
+        )
+
 
 class GetSessionIntent(AbstractRequestHandler):
     def can_handle(self, handler_input):
@@ -229,6 +259,7 @@ sb.add_request_handler(FallbackIntentHandler())
 sb.add_request_handler(SessionEndedRequestHandler())
 sb.add_request_handler(SendMessageIntentHandler())
 sb.add_request_handler(GetSessionIntent())
+sb.add_request_handler(SendMessageLocationIntentHandler())
 sb.add_request_handler(IntentReflectorHandler()) # make sure IntentReflectorHandler is last so it doesn't override your custom intent handlers
 
 sb.add_exception_handler(CatchAllExceptionHandler())
