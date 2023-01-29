@@ -20,15 +20,17 @@ logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
 SLOT_LOCATION = 'location'
+SLOT_MESSAGE = 'message'
 
 SESSION_LOCATION = 'location'
-SESSION_MESSAGE = 'message'
 SESSION_LAST_REQUEST = 'last-request'
 SESSION_GOAL = 'goal'
 
 MESSAGE_REQUEST = 'message-request'
 SEND_MESSAGE_GOAL = 'send-message'
-SESSION_LAST_REQUEST_LOCATION = 'location'
+LAST_REQUEST_LOCATION = 'location'
+LAST_REQUEST_MESSAGE = 'message'
+LAST_REQUEST_CONFIRM = 'confirm'
 
 def slots_of(handler_input):
     return handler_input.request_envelope.request.intent.slots
@@ -82,7 +84,7 @@ class SendMessageIntentHandler(AbstractRequestHandler):
         location = slots_of(handler_input)[SLOT_LOCATION].value
         session_attr[SESSION_GOAL] = SEND_MESSAGE_GOAL
         if location == None:
-            session_attr[SESSION_LAST_REQUEST] = SESSION_LAST_REQUEST_LOCATION
+            session_attr[SESSION_LAST_REQUEST] = LAST_REQUEST_LOCATION
             speak_output = "Great! Where would you like to send a message?"
             return (
                 handler_input.response_builder
@@ -92,7 +94,7 @@ class SendMessageIntentHandler(AbstractRequestHandler):
             )
         else:
             session_attr[SESSION_LOCATION] = location
-            session_attr[SESSION_LAST_REQUEST] = MESSAGE_REQUEST
+            session_attr[SESSION_LAST_REQUEST] = LAST_REQUEST_MESSAGE
             speak_output = f"Alright! What would you like to say to {location}?"
             return (
                 handler_input.response_builder
@@ -103,7 +105,7 @@ class SendMessageIntentHandler(AbstractRequestHandler):
 
 class SendMessageLocationIntentHandler(AbstractRequestHandler):
     def last_request_was_location(self, handler_input):
-        return attributes_of(handler_input)[SESSION_LAST_REQUEST] == SESSION_LAST_REQUEST_LOCATION
+        return attributes_of(handler_input)[SESSION_LAST_REQUEST] == LAST_REQUEST_LOCATION
 
 
     def can_handle(self, handler_input):
@@ -115,6 +117,23 @@ class SendMessageLocationIntentHandler(AbstractRequestHandler):
 
         speak_output = f"What would you like to say to {location}?"
 
+        attributes_of(handler_input)[SESSION_LAST_REQUEST] = LAST_REQUEST_MESSAGE
+
+        return (
+            handler_input.response_builder
+                .speak(speak_output)
+                .ask(speak_output)
+                .response
+        )
+class SendMessageMessageHandler(AbstractRequestHandler):
+    def can_handle(self, handler_input):
+        return attributes_of(handler_input)[SESSION_LAST_REQUEST] == LAST_REQUEST_MESSAGE and is_intent_name("ProvideMessageIntent")(handler_input)
+
+    def handle(self, handler_input):
+        message = slots_of(handler_input)[SLOT_MESSAGE].value
+        speak_output = f"This is your message: {message} ... should I send it?"
+
+        attributes_of(handler_input)[SESSION_LAST_REQUEST] = LAST_REQUEST_CONFIRM
         return (
             handler_input.response_builder
                 .speak(speak_output)
@@ -122,6 +141,34 @@ class SendMessageLocationIntentHandler(AbstractRequestHandler):
                 .response
         )
 
+class ConfirmMessageYesIntentHandler(AbstractRequestHandler):
+    def can_handle(self, handler_input):
+        return attributes_of(handler_input)[SESSION_LAST_REQUEST] == LAST_REQUEST_CONFIRM and is_intent_name("AMAZON.YesIntent")(handler_input)
+
+    def handle(self, handler_input):
+        speak_output = f"You've reached the SendMessageYesIntentHandler"
+
+        return (
+            handler_input.response_builder
+                .speak(speak_output)
+                .ask(speak_output)
+                .response
+        )
+
+
+class ConfirmMessageNoIntentHandler(AbstractRequestHandler):
+    def can_handle(self, handler_input):
+        return attributes_of(handler_input)[SESSION_LAST_REQUEST] == LAST_REQUEST_CONFIRM and is_intent_name("AMAZON.NoIntent")(handler_input)
+
+    def handle(self, handler_input):
+        speak_output = f"You've reached the SendMessageNoIntentHandler"
+
+        return (
+            handler_input.response_builder
+                .speak(speak_output)
+                .ask(speak_output)
+                .response
+        )
 
 class GetSessionIntent(AbstractRequestHandler):
     def can_handle(self, handler_input):
@@ -224,7 +271,7 @@ class CatchAllExceptionHandler(AbstractExceptionHandler):
         # type: (HandlerInput, Exception) -> Response
         logger.error(exception, exc_info=True)
 
-        speak_output = "Sorry, I had trouble doing what you asked. Please try again."
+        speak_output = f"Sorry, I had trouble doing what you asked. Please try again.\n{exception}"
 
         return (
             handler_input.response_builder
@@ -236,14 +283,17 @@ class CatchAllExceptionHandler(AbstractExceptionHandler):
 sb = SkillBuilder()
 
 sb.add_request_handler(LaunchRequestHandler())
-sb.add_request_handler(HelloWorldIntentHandler())
+sb.add_request_handler(SendMessageIntentHandler())
+sb.add_request_handler(GetSessionIntent())
+sb.add_request_handler(SendMessageLocationIntentHandler())
+sb.add_request_handler(SendMessageMessageHandler())
+sb.add_request_handler(ConfirmMessageNoIntentHandler())
+sb.add_request_handler(ConfirmMessageYesIntentHandler())
 sb.add_request_handler(HelpIntentHandler())
 sb.add_request_handler(CancelOrStopIntentHandler())
 sb.add_request_handler(FallbackIntentHandler())
 sb.add_request_handler(SessionEndedRequestHandler())
-sb.add_request_handler(SendMessageIntentHandler())
-sb.add_request_handler(GetSessionIntent())
-sb.add_request_handler(SendMessageLocationIntentHandler())
+sb.add_request_handler(HelloWorldIntentHandler())
 sb.add_request_handler(IntentReflectorHandler()) # make sure IntentReflectorHandler is last so it doesn't override your custom intent handlers
 
 sb.add_exception_handler(CatchAllExceptionHandler())
