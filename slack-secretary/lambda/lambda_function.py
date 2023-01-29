@@ -146,12 +146,13 @@ class ConfirmMessageYesIntentHandler(AbstractRequestHandler):
         return attributes_of(handler_input)[SESSION_LAST_REQUEST] == LAST_REQUEST_CONFIRM and is_intent_name("AMAZON.YesIntent")(handler_input)
 
     def handle(self, handler_input):
-        speak_output = f"You've reached the SendMessageYesIntentHandler"
+        # TODO actually send it
+
+        speak_output = f"Alright! Your message is sent!"
 
         return (
             handler_input.response_builder
                 .speak(speak_output)
-                .ask(speak_output)
                 .response
         )
 
