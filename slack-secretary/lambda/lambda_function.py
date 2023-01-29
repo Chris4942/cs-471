@@ -19,12 +19,17 @@ import json
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
 
+PROVIDE_MESSAGE_INTENT = 'ProvideMessageIntent'
+AMAZON_CANCEL_INTENT = "AMAZON.CancelIntent"
+AMAZON_STOP_INTENT = "AMAZON.StopIntent"
+
 SLOT_LOCATION = 'location'
 SLOT_MESSAGE = 'message'
 
 SESSION_LOCATION = 'location'
 SESSION_LAST_REQUEST = 'last-request'
 SESSION_GOAL = 'goal'
+SESSION_MESSAGE = 'message'
 
 MESSAGE_REQUEST = 'message-request'
 SEND_MESSAGE_GOAL = 'send-message'
@@ -50,7 +55,7 @@ class LaunchRequestHandler(AbstractRequestHandler):
 
     def handle(self, handler_input):
         # type: (HandlerInput) -> Response
-        speak_output = "Welcome, you can say Hello or Help. Which would you like to try?"
+        speak_output = "Welcome, you can ask me to send a message to someone for you. That's all for now."
 
         return (
             handler_input.response_builder
@@ -127,13 +132,32 @@ class SendMessageLocationIntentHandler(AbstractRequestHandler):
         )
 class SendMessageMessageHandler(AbstractRequestHandler):
     def can_handle(self, handler_input):
-        return attributes_of(handler_input)[SESSION_LAST_REQUEST] == LAST_REQUEST_MESSAGE and is_intent_name("ProvideMessageIntent")(handler_input)
+        return attributes_of(handler_input)[SESSION_LAST_REQUEST] == LAST_REQUEST_MESSAGE and is_intent_name(PROVIDE_MESSAGE_INTENT)(handler_input)
 
     def handle(self, handler_input):
         message = slots_of(handler_input)[SLOT_MESSAGE].value
-        speak_output = f"This is your message: {message} ... should I send it?"
+        location = attributes_of(handler_input)[SESSION_LOCATION]
+        speak_output = f"This is your message to {location}: {message} ... should I send it?"
 
         attributes_of(handler_input)[SESSION_LAST_REQUEST] = LAST_REQUEST_CONFIRM
+        attributes_of(handler_input)[SESSION_MESSAGE] = message
+        return (
+            handler_input.response_builder
+                .speak(speak_output)
+                .ask(speak_output)
+                .response
+        )
+class SendMessageIntentCatcher(AbstractRequestHandler):
+    def can_handle(self, handler_input):
+        return (attributes_of(handler_input)[SESSION_LAST_REQUEST] == LAST_REQUEST_MESSAGE
+            and not is_intent_name(PROVIDE_MESSAGE_INTENT)(handler_input)
+            and not is_intent_name(AMAZON_CANCEL_INTENT)(handler_input)
+            and not is_intent_name(AMAZON_STOP_INTENT)(handler_input))
+
+    def handle(self, handler_input):
+        example = "I'm on my way"
+        speak_output = f"To protect your privacy, you must provide a queue before your message. For example, if your message is \"{example}\", say \"tell him '{example}'\""
+
         return (
             handler_input.response_builder
                 .speak(speak_output)
@@ -141,14 +165,16 @@ class SendMessageMessageHandler(AbstractRequestHandler):
                 .response
         )
 
+
 class ConfirmMessageYesIntentHandler(AbstractRequestHandler):
     def can_handle(self, handler_input):
         return attributes_of(handler_input)[SESSION_LAST_REQUEST] == LAST_REQUEST_CONFIRM and is_intent_name("AMAZON.YesIntent")(handler_input)
 
     def handle(self, handler_input):
         # TODO actually send it
+        message = attributes_of(handler_input)[SESSION_MESSAGE]
 
-        speak_output = f"Alright! Your message is sent!"
+        speak_output = f"Alright! Your message is sent! {message}"
 
         return (
             handler_input.response_builder
@@ -162,8 +188,10 @@ class ConfirmMessageNoIntentHandler(AbstractRequestHandler):
         return attributes_of(handler_input)[SESSION_LAST_REQUEST] == LAST_REQUEST_CONFIRM and is_intent_name("AMAZON.NoIntent")(handler_input)
 
     def handle(self, handler_input):
-        speak_output = f"You've reached the SendMessageNoIntentHandler"
+        attributes_of(handler_input)[SESSION_MESSAGE] = None
+        attributes_of(handler_input)[SESSION_LAST_REQUEST] = LAST_REQUEST_MESSAGE
 
+        speak_output = f"Okay. What would you like your message to be?"
         return (
             handler_input.response_builder
                 .speak(speak_output)
@@ -204,8 +232,8 @@ class HelpIntentHandler(AbstractRequestHandler):
 class CancelOrStopIntentHandler(AbstractRequestHandler):
     """Single handler for Cancel and Stop Intent."""
     def can_handle(self, handler_input):
-        return (is_intent_name("AMAZON.CancelIntent")(handler_input) or
-                is_intent_name("AMAZON.StopIntent")(handler_input))
+        return (is_intent_name(AMAZON_CANCEL_INTENT)(handler_input) or
+                is_intent_name(AMAZON_STOP_INTENT)(handler_input))
 
     def handle(self, handler_input):
         speak_output = "Goodbye!"
@@ -288,6 +316,7 @@ sb.add_request_handler(SendMessageIntentHandler())
 sb.add_request_handler(GetSessionIntent())
 sb.add_request_handler(SendMessageLocationIntentHandler())
 sb.add_request_handler(SendMessageMessageHandler())
+sb.add_request_handler(SendMessageIntentCatcher())
 sb.add_request_handler(ConfirmMessageNoIntentHandler())
 sb.add_request_handler(ConfirmMessageYesIntentHandler())
 sb.add_request_handler(HelpIntentHandler())
