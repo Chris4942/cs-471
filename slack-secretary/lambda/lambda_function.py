@@ -46,7 +46,7 @@ class HelloWorldIntentHandler(AbstractRequestHandler):
     def handle(self, handler_input):
         # type: (HandlerInput) -> Response
         speak_output = "Hello World!"
-
+        
         return (
             handler_input.response_builder
                 .speak(speak_output)
@@ -59,15 +59,23 @@ class SendMessageIntentHandler(AbstractRequestHandler):
         return ask_utils.is_intent_name("SendMessageIntent")(handler_input)
     
     def handle(self, handler_input):
-        session_attr = handler_input.attributes_manager.session_attributes
-        
-        speak_output = JSON.stringify(session_attr)
-        
-        return (
-            handler_input.response_builder
-            .speak(speak_output)
-            .response
-        )
+        location = handler_input.request_envelope.request.intent.slots['location'].value
+        if location == None:
+            speak_output = "Great! Where would you like to send a message?"
+            return (
+                handler_input.response_builder
+                    .speak(speak_output)
+                    .ask(speak_output)
+                    .response
+            )
+        else:
+            speak_output = f"Alright! What would you like to say to {location}?"
+            return (
+                handler_input.response_builder
+                    .speak(speak_output)
+                    .ask(speak_output)
+                    .response
+            )
 
 
 class HelpIntentHandler(AbstractRequestHandler):
@@ -191,9 +199,8 @@ sb.add_request_handler(HelpIntentHandler())
 sb.add_request_handler(CancelOrStopIntentHandler())
 sb.add_request_handler(FallbackIntentHandler())
 sb.add_request_handler(SessionEndedRequestHandler())
-sb.add_request_handler(SendMessageIntent())
+sb.add_request_handler(SendMessageIntentHandler())
 sb.add_request_handler(IntentReflectorHandler()) # make sure IntentReflectorHandler is last so it doesn't override your custom intent handlers
 
 sb.add_exception_handler(CatchAllExceptionHandler())
-
 lambda_handler = sb.lambda_handler()
