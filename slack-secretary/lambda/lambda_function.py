@@ -15,6 +15,7 @@ from ask_sdk_core.handler_input import HandlerInput
 from ask_sdk_model import Response
 
 import json
+import traceback
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -25,14 +26,16 @@ AMAZON_STOP_INTENT = "AMAZON.StopIntent"
 
 SLOT_LOCATION = 'location'
 SLOT_MESSAGE = 'message'
+SLOT_TELL_MESSAGE = 'tellMessage'
 
 SESSION_LOCATION = 'location'
-SESSION_LAST_REQUEST = 'last-request'
+SESSION_LAST_REQUEST = 'lastRequest'
 SESSION_GOAL = 'goal'
 SESSION_MESSAGE = 'message'
+SESSION_LAST_HANDLER = 'lastHandler'
 
-MESSAGE_REQUEST = 'message-request'
-SEND_MESSAGE_GOAL = 'send-message'
+MESSAGE_REQUEST = 'messageRequest'
+SEND_MESSAGE_GOAL = 'sendMessage'
 LAST_REQUEST_LOCATION = 'location'
 LAST_REQUEST_MESSAGE = 'message'
 LAST_REQUEST_CONFIRM = 'confirm'
@@ -81,34 +84,45 @@ class HelloWorldIntentHandler(AbstractRequestHandler):
         )
 
 class SendMessageIntentHandler(AbstractRequestHandler):
+    LAST_HANDLER_VALUE = 'SendMessageIntentHandler'
+
     def can_handle(self, handler_input):
         return is_intent_name("SendMessageIntent")(handler_input)
     
     def handle(self, handler_input):
         session_attr = attributes_of(handler_input)
         location = slots_of(handler_input)[SLOT_LOCATION].value
+        tellMessage = slots_of(handler_input)[SLOT_TELL_MESSAGE].value
         session_attr[SESSION_GOAL] = SEND_MESSAGE_GOAL
-        if location == None:
+        speak_output = f"Something went wrong and I didn't get overwritten. {traceback.print_stack()}"
+        attributes_of(handler_input)[SESSION_LAST_HANDLER] = SendMessageIntentHandler.LAST_HANDLER_VALUE
+        if location == None and tellMessage == None:
             session_attr[SESSION_LAST_REQUEST] = LAST_REQUEST_LOCATION
             speak_output = "Great! Where would you like to send a message?"
-            return (
-                handler_input.response_builder
-                    .speak(speak_output)
-                    .ask(speak_output)
-                    .response
-            )
-        else:
+        elif location != None and tellMessage == None:
             session_attr[SESSION_LOCATION] = location
             session_attr[SESSION_LAST_REQUEST] = LAST_REQUEST_MESSAGE
             speak_output = f"Alright! What would you like to say to {location}?"
-            return (
-                handler_input.response_builder
-                    .speak(speak_output)
-                    .ask(speak_output)
-                    .response
-            )
+        elif location == None and tellMessage != None:
+            words = tellMessage.split(' ')
+            # TODO do something cool with the api here, but for now we're doing this dumb thing instead
+            location = words[0]
+            message = ' '.join(words[1:])
+            speak_output = message_confirmation_string(location, message)
+            attributes_of(handler_input)[SESSION_LAST_REQUEST] = LAST_REQUEST_CONFIRM
+            attributes_of(handler_input)[SESSION_MESSAGE] = message
+        return (
+            handler_input.response_builder
+                .speak(speak_output)
+                .ask(speak_output)
+                .response
+        )
+
+
 
 class SendMessageLocationIntentHandler(AbstractRequestHandler):
+    LAST_HANDLER_VALUE = 'SendMessageLocationIntentHandler'
+
     def last_request_was_location(self, handler_input):
         return attributes_of(handler_input)[SESSION_LAST_REQUEST] == LAST_REQUEST_LOCATION
 
@@ -119,34 +133,41 @@ class SendMessageLocationIntentHandler(AbstractRequestHandler):
     def handle(self, handler_input):
         location = slots_of(handler_input)[SLOT_LOCATION].value
         attributes_of(handler_input)[SESSION_LOCATION] = location
-
         speak_output = f"What would you like to say to {location}?"
-
         attributes_of(handler_input)[SESSION_LAST_REQUEST] = LAST_REQUEST_MESSAGE
 
+        attributes_of(handler_input)[SESSION_LAST_HANDLER] = SendMessageLocationIntentHandler.LAST_HANDLER_VALUE
         return (
             handler_input.response_builder
                 .speak(speak_output)
                 .ask(speak_output)
                 .response
         )
+
+def message_confirmation_string(location, message):
+    return f"This is your message to {location}: {message} ... should I send it?"
+
 class SendMessageMessageHandler(AbstractRequestHandler):
+    LAST_HANDLER_VALUE = 'SendMessageMessageHandler'
+
     def can_handle(self, handler_input):
         return attributes_of(handler_input)[SESSION_LAST_REQUEST] == LAST_REQUEST_MESSAGE and is_intent_name(PROVIDE_MESSAGE_INTENT)(handler_input)
 
     def handle(self, handler_input):
         message = slots_of(handler_input)[SLOT_MESSAGE].value
         location = attributes_of(handler_input)[SESSION_LOCATION]
-        speak_output = f"This is your message to {location}: {message} ... should I send it?"
+        speak_output = message_confirmation_string(location, message)
 
         attributes_of(handler_input)[SESSION_LAST_REQUEST] = LAST_REQUEST_CONFIRM
         attributes_of(handler_input)[SESSION_MESSAGE] = message
+        attributes_of(handler_input)[SESSION_LAST_HANDLER] = SendMessageMessageHandler.LAST_HANDLER_VALUE
         return (
             handler_input.response_builder
                 .speak(speak_output)
                 .ask(speak_output)
                 .response
         )
+
 class SendMessageIntentCatcher(AbstractRequestHandler):
     def can_handle(self, handler_input):
         return (attributes_of(handler_input)[SESSION_LAST_REQUEST] == LAST_REQUEST_MESSAGE
@@ -156,7 +177,7 @@ class SendMessageIntentCatcher(AbstractRequestHandler):
 
     def handle(self, handler_input):
         example = "I'm on my way"
-        speak_output = f"To protect your privacy, you must provide a queue before your message. For example, if your message is \"{example}\", say \"tell him '{example}'\""
+        speak_output = f"To protect your privacy, you must provide a trigger first. For example, if your message is \"{example}\", say \"tell him '{example}'\""
 
         return (
             handler_input.response_builder
@@ -184,20 +205,35 @@ class ConfirmMessageYesIntentHandler(AbstractRequestHandler):
 
 
 class ConfirmMessageNoIntentHandler(AbstractRequestHandler):
+    LAST_HANDLER_VALUE = 'ConfirmMessageNoIntentHandler'
     def can_handle(self, handler_input):
         return attributes_of(handler_input)[SESSION_LAST_REQUEST] == LAST_REQUEST_CONFIRM and is_intent_name("AMAZON.NoIntent")(handler_input)
 
     def handle(self, handler_input):
         attributes_of(handler_input)[SESSION_MESSAGE] = None
-        attributes_of(handler_input)[SESSION_LAST_REQUEST] = LAST_REQUEST_MESSAGE
+        last_handler = attributes_of(handler_input)[SESSION_LAST_HANDLER]
 
-        speak_output = f"Okay. What would you like your message to be?"
-        return (
-            handler_input.response_builder
+        response = None
+        if last_handler == SendMessageIntentHandler.LAST_HANDLER_VALUE:
+            attributes_of(handler_input)[SESSION_LOCATION] = None
+            speak_output = "Okay. I won't send it."
+            response = (
+                handler_input.response_builder
+                .speak(speak_output)
+                .response
+            )
+        else:
+            attributes_of(handler_input)[SESSION_LAST_REQUEST] = LAST_REQUEST_MESSAGE
+            speak_output = f"Okay. What would you like your message to be?"
+            response = (
+                handler_input.response_builder
                 .speak(speak_output)
                 .ask(speak_output)
                 .response
-        )
+            )
+        attributes_of(handler_input)[SESSION_LAST_HANDLER] = ConfirmMessageNoIntentHandler.LAST_HANDLER_VALUE
+        return response
+
 
 class GetSessionIntent(AbstractRequestHandler):
     def can_handle(self, handler_input):
@@ -237,7 +273,6 @@ class CancelOrStopIntentHandler(AbstractRequestHandler):
 
     def handle(self, handler_input):
         speak_output = "Goodbye!"
-
         return (
             handler_input.response_builder
                 .speak(speak_output)
