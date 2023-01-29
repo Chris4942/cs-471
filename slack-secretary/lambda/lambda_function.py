@@ -36,6 +36,9 @@ def slots_of(handler_input):
 def attributes_of(handler_input):
     return handler_input.attributes_manager.session_attributes
 
+def is_intent_name(intent_name):
+    return ask_utils.is_intent_name(intent_name)
+
 class LaunchRequestHandler(AbstractRequestHandler):
     """Handler for Skill Launch."""
     def can_handle(self, handler_input):
@@ -59,26 +62,24 @@ class HelloWorldIntentHandler(AbstractRequestHandler):
     """Handler for Hello World Intent."""
     def can_handle(self, handler_input):
         # type: (HandlerInput) -> bool
-        return ask_utils.is_intent_name("HelloWorldIntent")(handler_input)
+        return is_intent_name("HelloWorldIntent")(handler_input)
 
     def handle(self, handler_input):
-        # type: (HandlerInput) -> Response
         speak_output = "Hello World!"
         
         return (
             handler_input.response_builder
                 .speak(speak_output)
-                # .ask("add a reprompt if you want to keep the session open for the user to respond")
                 .response
         )
 
 class SendMessageIntentHandler(AbstractRequestHandler):
     def can_handle(self, handler_input):
-        return ask_utils.is_intent_name("SendMessageIntent")(handler_input)
+        return is_intent_name("SendMessageIntent")(handler_input)
     
     def handle(self, handler_input):
-        session_attr = handler_input.attributes_manager.session_attributes
-        location = handler_input.request_envelope.request.intent.slots[SLOT_LOCATION].value
+        session_attr = attributes_of(handler_input)
+        location = slots_of(handler_input)[SLOT_LOCATION].value
         session_attr[SESSION_GOAL] = SEND_MESSAGE_GOAL
         if location == None:
             session_attr[SESSION_LAST_REQUEST] = SESSION_LAST_REQUEST_LOCATION
@@ -102,11 +103,11 @@ class SendMessageIntentHandler(AbstractRequestHandler):
 
 class SendMessageLocationIntentHandler(AbstractRequestHandler):
     def last_request_was_location(self, handler_input):
-        return handler_input.attributes_manager.session_attributes[SESSION_LAST_REQUEST] == SESSION_LAST_REQUEST_LOCATION
+        return attributes_of(handler_input)[SESSION_LAST_REQUEST] == SESSION_LAST_REQUEST_LOCATION
 
 
     def can_handle(self, handler_input):
-        return self.last_request_was_location(handler_input) and ask_utils.is_intent_name("ProvideLocationIntent")(handler_input)
+        return self.last_request_was_location(handler_input) and is_intent_name("ProvideLocationIntent")(handler_input)
 
     def handle(self, handler_input):
         location = slots_of(handler_input)[SLOT_LOCATION].value
@@ -124,10 +125,10 @@ class SendMessageLocationIntentHandler(AbstractRequestHandler):
 
 class GetSessionIntent(AbstractRequestHandler):
     def can_handle(self, handler_input):
-        return ask_utils.is_intent_name("GetSessionData")(handler_input)
+        return is_intent_name("GetSessionData")(handler_input)
 
     def handle(self, handler_input):
-        session_attr = handler_input.attributes_manager.session_attributes
+        session_attr = attributes_of(handler_input)
         speak_output = json.dumps(session_attr)
         return (
             handler_input.response_builder
@@ -139,11 +140,9 @@ class GetSessionIntent(AbstractRequestHandler):
 class HelpIntentHandler(AbstractRequestHandler):
     """Handler for Help Intent."""
     def can_handle(self, handler_input):
-        # type: (HandlerInput) -> bool
-        return ask_utils.is_intent_name("AMAZON.HelpIntent")(handler_input)
+        return is_intent_name("AMAZON.HelpIntent")(handler_input)
 
     def handle(self, handler_input):
-        # type: (HandlerInput) -> Response
         speak_output = "You can say hello to me! How can I help?"
 
         return (
@@ -157,12 +156,10 @@ class HelpIntentHandler(AbstractRequestHandler):
 class CancelOrStopIntentHandler(AbstractRequestHandler):
     """Single handler for Cancel and Stop Intent."""
     def can_handle(self, handler_input):
-        # type: (HandlerInput) -> bool
-        return (ask_utils.is_intent_name("AMAZON.CancelIntent")(handler_input) or
-                ask_utils.is_intent_name("AMAZON.StopIntent")(handler_input))
+        return (is_intent_name("AMAZON.CancelIntent")(handler_input) or
+                is_intent_name("AMAZON.StopIntent")(handler_input))
 
     def handle(self, handler_input):
-        # type: (HandlerInput) -> Response
         speak_output = "Goodbye!"
 
         return (
@@ -174,11 +171,9 @@ class CancelOrStopIntentHandler(AbstractRequestHandler):
 class FallbackIntentHandler(AbstractRequestHandler):
     """Single handler for Fallback Intent."""
     def can_handle(self, handler_input):
-        # type: (HandlerInput) -> bool
-        return ask_utils.is_intent_name("AMAZON.FallbackIntent")(handler_input)
+        return is_intent_name("AMAZON.FallbackIntent")(handler_input)
 
     def handle(self, handler_input):
-        # type: (HandlerInput) -> Response
         logger.info("In FallbackIntentHandler")
         speech = "Hmm, I'm not sure. You can say Hello or Help. What would you like to do?"
         reprompt = "I didn't catch that. What can I help you with?"
@@ -188,14 +183,10 @@ class FallbackIntentHandler(AbstractRequestHandler):
 class SessionEndedRequestHandler(AbstractRequestHandler):
     """Handler for Session End."""
     def can_handle(self, handler_input):
-        # type: (HandlerInput) -> bool
         return ask_utils.is_request_type("SessionEndedRequest")(handler_input)
 
     def handle(self, handler_input):
-        # type: (HandlerInput) -> Response
-
-        # Any cleanup logic goes here.
-
+        # TODO Any cleanup logic goes here.
         return handler_input.response_builder.response
 
 
@@ -206,11 +197,9 @@ class IntentReflectorHandler(AbstractRequestHandler):
     handler chain below.
     """
     def can_handle(self, handler_input):
-        # type: (HandlerInput) -> bool
         return ask_utils.is_request_type("IntentRequest")(handler_input)
 
     def handle(self, handler_input):
-        # type: (HandlerInput) -> Response
         intent_name = ask_utils.get_intent_name(handler_input)
         speak_output = "You just triggered " + intent_name + "."
 
@@ -243,11 +232,6 @@ class CatchAllExceptionHandler(AbstractExceptionHandler):
                 .ask(speak_output)
                 .response
         )
-
-# The SkillBuilder object acts as the entry point for your skill, routing all request and response
-# payloads to the handlers above. Make sure any new handlers or interceptors you've
-# defined are included below. The order matters - they're processed top to bottom.
-
 
 sb = SkillBuilder()
 
