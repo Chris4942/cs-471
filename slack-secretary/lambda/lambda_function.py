@@ -177,7 +177,7 @@ class SendMessageIntentCatcher(AbstractRequestHandler):
 
     def handle(self, handler_input):
         example = "I'm on my way"
-        speak_output = f"To protect your privacy, you must provide a trigger first. For example, if your message is \"{example}\", say \"tell him '{example}'\""
+        speak_output = f"I'm not sure where you message started. If your message is \"{example}\", say something like \"tell him '{example}'\""
 
         return (
             handler_input.response_builder
