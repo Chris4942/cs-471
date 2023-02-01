@@ -17,8 +17,13 @@ from ask_sdk_model import Response
 import json
 import traceback
 
+from requests import get, post
+
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
+
+# TODO the token is below is for an inconsequential slack workspace. This would need to be done differently if this were ever used in production
+HEADERS = {"Authorization": "Bearer xoxb-4753428053280-4742434306049-9soWlaebmTXMm2XkZRbfQLJL"}
 
 PROVIDE_MESSAGE_INTENT = 'ProvideMessageIntent'
 AMAZON_CANCEL_INTENT = "AMAZON.CancelIntent"
@@ -48,6 +53,29 @@ def attributes_of(handler_input):
 
 def is_intent_name(intent_name):
     return ask_utils.is_intent_name(intent_name)
+
+def resolve_name_location(location_name):
+    response_object = get('https://slack.com/api/users.list', headers=HEADERS)
+    logger.info(f"got response object {response_object}")
+    json_object = response_object.json()
+    logger.info(f"got json object")
+    members = json_object["members"]
+    logger.info(f"got members: { members }")
+    def rate_match(current_location_name, member):
+        if current_location_name.lower() == member["real_name"].lower():
+            return 1.0
+        if current_location_name.lower() in member["real_name"].lower() or member["real_name"].lower() in current_location_name.lower():
+            return 0.9
+        return 0.0
+    best_match = None
+    best_match_score = 0.0
+    for member in members:
+        score = rate_match(location_name, member)
+        logger.info(f"Score for {member} is {score} against {location_name}")
+        if score > best_match_score:
+            best_match = member
+            best_match_score = score
+    return best_match
 
 class LaunchRequestHandler(AbstractRequestHandler):
     """Handler for Skill Launch."""
@@ -99,9 +127,11 @@ class SendMessageIntentHandler(AbstractRequestHandler):
             session_attr[SESSION_LAST_REQUEST] = LAST_REQUEST_LOCATION
             speak_output = "Great! Where would you like to send a message?"
         elif location != None and tellMessage == None:
-            session_attr[SESSION_LOCATION] = location
+            member = resolve_name_location(location)
+            member_name = member["real_name"]
+            session_attr[SESSION_LOCATION] = member
             session_attr[SESSION_LAST_REQUEST] = LAST_REQUEST_MESSAGE
-            speak_output = f"Alright! What would you like to say to {location}?"
+            speak_output = f"Alright! What would you like to say to { member_name }?"
         elif location == None and tellMessage != None:
             words = tellMessage.split(' ')
             # TODO do something cool with the api here, but for now we're doing this dumb thing instead
@@ -121,7 +151,10 @@ class SendMessageLocationIntentHandler(AbstractRequestHandler):
     LAST_HANDLER_VALUE = 'SendMessageLocationIntentHandler'
 
     def last_request_was_location(self, handler_input):
-        return attributes_of(handler_input)[SESSION_LAST_REQUEST] == LAST_REQUEST_LOCATION
+        return (
+            SESSION_LAST_REQUEST in attributes_of(handler_input) 
+            and attributes_of(handler_input)[SESSION_LAST_REQUEST] == LAST_REQUEST_LOCATION
+        )
 
 
     def can_handle(self, handler_input):
@@ -148,7 +181,11 @@ class SendMessageMessageHandler(AbstractRequestHandler):
     LAST_HANDLER_VALUE = 'SendMessageMessageHandler'
 
     def can_handle(self, handler_input):
-        return attributes_of(handler_input)[SESSION_LAST_REQUEST] == LAST_REQUEST_MESSAGE and is_intent_name(PROVIDE_MESSAGE_INTENT)(handler_input)
+        return (
+            SESSION_LAST_REQUEST in attributes_of(handler_input)
+            and attributes_of(handler_input)[SESSION_LAST_REQUEST] == LAST_REQUEST_MESSAGE
+            and is_intent_name(PROVIDE_MESSAGE_INTENT)(handler_input)
+        )
 
     def handle(self, handler_input):
         message = slots_of(handler_input)[SLOT_MESSAGE].value
@@ -167,7 +204,9 @@ class SendMessageMessageHandler(AbstractRequestHandler):
 
 class SendMessageIntentCatcher(AbstractRequestHandler):
     def can_handle(self, handler_input):
-        return (attributes_of(handler_input)[SESSION_LAST_REQUEST] == LAST_REQUEST_MESSAGE
+        return (
+            SESSION_LAST_REQUEST in attributes_of(handler_input)
+            and attributes_of(handler_input)[SESSION_LAST_REQUEST] == LAST_REQUEST_MESSAGE
             and not is_intent_name(PROVIDE_MESSAGE_INTENT)(handler_input)
             and not is_intent_name(AMAZON_CANCEL_INTENT)(handler_input)
             and not is_intent_name(AMAZON_STOP_INTENT)(handler_input))
@@ -185,7 +224,11 @@ class SendMessageIntentCatcher(AbstractRequestHandler):
 
 class ConfirmMessageYesIntentHandler(AbstractRequestHandler):
     def can_handle(self, handler_input):
-        return attributes_of(handler_input)[SESSION_LAST_REQUEST] == LAST_REQUEST_CONFIRM and is_intent_name("AMAZON.YesIntent")(handler_input)
+        return (
+            SESSION_LAST_REQUEST in attributes_of(handler_input)
+            and attributes_of(handler_input)[SESSION_LAST_REQUEST] == LAST_REQUEST_CONFIRM
+            and is_intent_name("AMAZON.YesIntent")(handler_input)
+        )
 
     def handle(self, handler_input):
         # TODO actually send it
@@ -202,7 +245,11 @@ class ConfirmMessageYesIntentHandler(AbstractRequestHandler):
 class ConfirmMessageNoIntentHandler(AbstractRequestHandler):
     LAST_HANDLER_VALUE = 'ConfirmMessageNoIntentHandler'
     def can_handle(self, handler_input):
-        return attributes_of(handler_input)[SESSION_LAST_REQUEST] == LAST_REQUEST_CONFIRM and is_intent_name("AMAZON.NoIntent")(handler_input)
+        return (
+            SESSION_LAST_REQUEST in attributes_of(handler_input)
+            and attributes_of(handler_input)[SESSION_LAST_REQUEST] == LAST_REQUEST_CONFIRM
+            and is_intent_name("AMAZON.NoIntent")(handler_input)
+        )
 
     def handle(self, handler_input):
         attributes_of(handler_input)[SESSION_MESSAGE] = None
@@ -236,6 +283,19 @@ class GetSessionIntent(AbstractRequestHandler):
     def handle(self, handler_input):
         session_attr = attributes_of(handler_input)
         speak_output = json.dumps(session_attr)
+        return (
+            handler_input.response_builder
+                .speak(speak_output)
+                .ask(speak_output)
+                .response
+        )
+
+class ReadMessageIntentHandler(AbstractRequestHandler):
+    def can_handle(self, handler_input):
+        return is_intent_name("ReadMessageIntent")(handler_input)
+    
+    def handle(self, handler_input):
+        speak_output = "You've reach the ReadMessageIntent"
         return (
             handler_input.response_builder
                 .speak(speak_output)
@@ -326,7 +386,7 @@ class CatchAllExceptionHandler(AbstractExceptionHandler):
         # type: (HandlerInput, Exception) -> Response
         logger.error(exception, exc_info=True)
 
-        speak_output = f"Sorry, I had trouble doing what you asked. Please try again.\n{exception}"
+        speak_output = f"Sorry, I had trouble doing what you asked. Please try again.\n{exception}, {json.dumps(attributes_of(handler_input))}"
 
         return (
             handler_input.response_builder
@@ -345,6 +405,7 @@ sb.add_request_handler(SendMessageMessageHandler())
 sb.add_request_handler(SendMessageIntentCatcher())
 sb.add_request_handler(ConfirmMessageNoIntentHandler())
 sb.add_request_handler(ConfirmMessageYesIntentHandler())
+sb.add_request_handler(ReadMessageIntentHandler())
 sb.add_request_handler(HelpIntentHandler())
 sb.add_request_handler(CancelOrStopIntentHandler())
 sb.add_request_handler(FallbackIntentHandler())
