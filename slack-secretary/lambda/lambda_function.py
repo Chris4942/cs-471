@@ -67,7 +67,6 @@ class LaunchRequestHandler(AbstractRequestHandler):
                 .response
         )
 
-
 class HelloWorldIntentHandler(AbstractRequestHandler):
     """Handler for Hello World Intent."""
     def can_handle(self, handler_input):
@@ -117,8 +116,6 @@ class SendMessageIntentHandler(AbstractRequestHandler):
                 .ask(speak_output)
                 .response
         )
-
-
 
 class SendMessageLocationIntentHandler(AbstractRequestHandler):
     LAST_HANDLER_VALUE = 'SendMessageLocationIntentHandler'
@@ -186,7 +183,6 @@ class SendMessageIntentCatcher(AbstractRequestHandler):
                 .response
         )
 
-
 class ConfirmMessageYesIntentHandler(AbstractRequestHandler):
     def can_handle(self, handler_input):
         return attributes_of(handler_input)[SESSION_LAST_REQUEST] == LAST_REQUEST_CONFIRM and is_intent_name("AMAZON.YesIntent")(handler_input)
@@ -202,7 +198,6 @@ class ConfirmMessageYesIntentHandler(AbstractRequestHandler):
                 .speak(speak_output)
                 .response
         )
-
 
 class ConfirmMessageNoIntentHandler(AbstractRequestHandler):
     LAST_HANDLER_VALUE = 'ConfirmMessageNoIntentHandler'
@@ -234,7 +229,6 @@ class ConfirmMessageNoIntentHandler(AbstractRequestHandler):
         attributes_of(handler_input)[SESSION_LAST_HANDLER] = ConfirmMessageNoIntentHandler.LAST_HANDLER_VALUE
         return response
 
-
 class GetSessionIntent(AbstractRequestHandler):
     def can_handle(self, handler_input):
         return is_intent_name("GetSessionData")(handler_input)
@@ -263,7 +257,6 @@ class HelpIntentHandler(AbstractRequestHandler):
                 .ask(speak_output)
                 .response
         )
-
 
 class CancelOrStopIntentHandler(AbstractRequestHandler):
     """Single handler for Cancel and Stop Intent."""
@@ -300,7 +293,6 @@ class SessionEndedRequestHandler(AbstractRequestHandler):
         # TODO Any cleanup logic goes here.
         return handler_input.response_builder.response
 
-
 class IntentReflectorHandler(AbstractRequestHandler):
     """The intent reflector is used for interaction model testing and debugging.
     It will simply repeat the intent the user said. You can create custom handlers
@@ -320,7 +312,6 @@ class IntentReflectorHandler(AbstractRequestHandler):
                 # .ask("add a reprompt if you want to keep the session open for the user to respond")
                 .response
         )
-
 
 class CatchAllExceptionHandler(AbstractExceptionHandler):
     """Generic error handling to capture any syntax or routing errors. If you receive an error
