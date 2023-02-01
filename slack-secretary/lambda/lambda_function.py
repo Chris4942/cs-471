@@ -77,6 +77,12 @@ def resolve_name_location(location_name):
             best_match_score = score
     return best_match
 
+def send_message(channel, message):
+    return post("https://slack.com/api/chat.postMessage", data={
+        "channel": channel,
+        "text": message,
+    }, headers=HEADERS).json()
+
 class LaunchRequestHandler(AbstractRequestHandler):
     """Handler for Skill Launch."""
     def can_handle(self, handler_input):
@@ -134,10 +140,11 @@ class SendMessageIntentHandler(AbstractRequestHandler):
             speak_output = f"Alright! What would you like to say to { member_name }?"
         elif location == None and tellMessage != None:
             words = tellMessage.split(' ')
-            # TODO do something cool with the api here, but for now we're doing this dumb thing instead
-            location = words[0]
+            location_name = words[0]
+            member = resolve_name_location(location_name)
             message = ' '.join(words[1:])
-            speak_output = message_confirmation_string(location, message)
+            speak_output = message_confirmation_string(member, message)
+            attributes_of(handler_input)[SESSION_LOCATION] = member
             attributes_of(handler_input)[SESSION_LAST_REQUEST] = LAST_REQUEST_CONFIRM
             attributes_of(handler_input)[SESSION_MESSAGE] = message
         return (
@@ -174,8 +181,9 @@ class SendMessageLocationIntentHandler(AbstractRequestHandler):
                 .response
         )
 
-def message_confirmation_string(location, message):
-    return f"This is your message to {location}: {message} ... should I send it?"
+def message_confirmation_string(member, message):
+    member_name = member["real_name"]
+    return f"This is your message to { member_name }: {message} ... should I send it?"
 
 class SendMessageMessageHandler(AbstractRequestHandler):
     LAST_HANDLER_VALUE = 'SendMessageMessageHandler'
@@ -189,8 +197,8 @@ class SendMessageMessageHandler(AbstractRequestHandler):
 
     def handle(self, handler_input):
         message = slots_of(handler_input)[SLOT_MESSAGE].value
-        location = attributes_of(handler_input)[SESSION_LOCATION]
-        speak_output = message_confirmation_string(location, message)
+        member = attributes_of(handler_input)[SESSION_LOCATION]
+        speak_output = message_confirmation_string(member, message)
 
         attributes_of(handler_input)[SESSION_LAST_REQUEST] = LAST_REQUEST_CONFIRM
         attributes_of(handler_input)[SESSION_MESSAGE] = message
@@ -231,8 +239,11 @@ class ConfirmMessageYesIntentHandler(AbstractRequestHandler):
         )
 
     def handle(self, handler_input):
-        # TODO actually send it
         message = attributes_of(handler_input)[SESSION_MESSAGE]
+        member = attributes_of(handler_input)[SESSION_LOCATION]
+
+        response = send_message(member['id'], message)
+        logger.info(f"Message sent: {response}")
 
         speak_output = f"Alright! Your message is sent! {message}"
 
