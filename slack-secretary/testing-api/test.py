@@ -14,6 +14,10 @@ def post_message(message):
         "text": message,
     } ,headers=headers)
 
+def get_conversation_list():
+    return requests.get('https://slack.com/api/conversations.list', headers=headers)
+
 # print(get_conversations().json())
 # print(post_message("test direct message").json())
-print(get_list_of_users().json()["members"])
+# print(get_list_of_users().json()["members"])
+print(get_conversation_list().json())

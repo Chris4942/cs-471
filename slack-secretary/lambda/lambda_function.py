@@ -32,6 +32,7 @@ AMAZON_STOP_INTENT = "AMAZON.StopIntent"
 SLOT_LOCATION = 'location'
 SLOT_MESSAGE = 'message'
 SLOT_TELL_MESSAGE = 'tellMessage'
+SLOT_COMPLEX_LOCATION = 'complexLocation'
 
 SESSION_LOCATION = 'location'
 SESSION_LAST_REQUEST = 'lastRequest'
@@ -54,28 +55,35 @@ def attributes_of(handler_input):
 def is_intent_name(intent_name):
     return ask_utils.is_intent_name(intent_name)
 
+def find_best_match(list, target, matching_fun):
+    best_match = None
+    best_match_score = 0.0
+    for item in list:
+        score = matching_fun(target, item)
+        if score > best_match_score:
+            best_match = item
+            best_match_score = score
+    return best_match, score
+
 def resolve_name_location(location_name):
-    response_object = get('https://slack.com/api/users.list', headers=HEADERS)
-    logger.info(f"got response object {response_object}")
-    json_object = response_object.json()
-    logger.info(f"got json object")
-    members = json_object["members"]
-    logger.info(f"got members: { members }")
+    members = get('https://slack.com/api/users.list', headers=HEADERS).json()['members']
     def rate_match(current_location_name, member):
         if current_location_name.lower() == member["real_name"].lower():
             return 1.0
         if current_location_name.lower() in member["real_name"].lower() or member["real_name"].lower() in current_location_name.lower():
             return 0.9
         return 0.0
-    best_match = None
-    best_match_score = 0.0
-    for member in members:
-        score = rate_match(location_name, member)
-        logger.info(f"Score for {member} is {score} against {location_name}")
-        if score > best_match_score:
-            best_match = member
-            best_match_score = score
-    return best_match
+    return find_best_match(members, location_name, rate_match)[0]
+
+def resolve_channel_location(words):
+    channels = get('https://slack.com/api/conversations.list', headers=HEADERS).json()['channels']
+    def rate_match(words, channel):
+        total_matches = 0
+        for word in words:
+            if word.lower() in channel["name"].lower() or channel["name"].lower() in word.lower():
+                total_matches += 1
+        return total_matches
+    return find_best_match(channels, words, rate_match)[0]
 
 def send_message(channel, message):
     return post("https://slack.com/api/chat.postMessage", data={
@@ -126,19 +134,20 @@ class SendMessageIntentHandler(AbstractRequestHandler):
         session_attr = attributes_of(handler_input)
         location = slots_of(handler_input)[SLOT_LOCATION].value
         tellMessage = slots_of(handler_input)[SLOT_TELL_MESSAGE].value
+        complexLocation = slots_of(handler_input)[SLOT_COMPLEX_LOCATION].value
         session_attr[SESSION_GOAL] = SEND_MESSAGE_GOAL
-        speak_output = f"Something went wrong and I didn't get overwritten. {traceback.print_stack()}"
+        speak_output = f"Something went wrong and I didn't get overwritten. {slots_of(handler_input)}"
         attributes_of(handler_input)[SESSION_LAST_HANDLER] = SendMessageIntentHandler.LAST_HANDLER_VALUE
-        if location == None and tellMessage == None:
+        if location == None and tellMessage == None and complexLocation == None:
             session_attr[SESSION_LAST_REQUEST] = LAST_REQUEST_LOCATION
             speak_output = "Great! Where would you like to send a message?"
-        elif location != None and tellMessage == None:
+        elif location != None and tellMessage == None and complexLocation == None:
             member = resolve_name_location(location)
             member_name = member["real_name"]
             session_attr[SESSION_LOCATION] = member
             session_attr[SESSION_LAST_REQUEST] = LAST_REQUEST_MESSAGE
             speak_output = f"Alright! What would you like to say to { member_name }?"
-        elif location == None and tellMessage != None:
+        elif location == None and tellMessage != None and complexLocation == None:
             words = tellMessage.split(' ')
             location_name = words[0]
             member = resolve_name_location(location_name)
@@ -147,6 +156,13 @@ class SendMessageIntentHandler(AbstractRequestHandler):
             attributes_of(handler_input)[SESSION_LOCATION] = member
             attributes_of(handler_input)[SESSION_LAST_REQUEST] = LAST_REQUEST_CONFIRM
             attributes_of(handler_input)[SESSION_MESSAGE] = message
+        elif location == None and tellMessage == None and complexLocation != None:
+            words = complexLocation.split(' ')
+            location = resolve_channel_location(words)
+            channel_name = location["name"]
+            attributes_of(handler_input)[SESSION_LOCATION] = location
+            attributes_of(handler_input)[SESSION_LAST_REQUEST] = LAST_REQUEST_MESSAGE
+            speak_output = f"Alright! What would you like to send to the {channel_name} channel?"
         return (
             handler_input.response_builder
                 .speak(speak_output)
@@ -182,8 +198,12 @@ class SendMessageLocationIntentHandler(AbstractRequestHandler):
         )
 
 def message_confirmation_string(member, message):
-    member_name = member["real_name"]
-    return f"This is your message to { member_name }: {message} ... should I send it?"
+    name = None
+    if member["is_channel"]:
+        name = member["name"]
+    else:
+        name = member["real_name"]
+    return f"This is your message to { name }: {message} ... should I send it?"
 
 class SendMessageMessageHandler(AbstractRequestHandler):
     LAST_HANDLER_VALUE = 'SendMessageMessageHandler'
@@ -221,7 +241,7 @@ class SendMessageIntentCatcher(AbstractRequestHandler):
 
     def handle(self, handler_input):
         example = "I'm on my way"
-        speak_output = f"I'm not sure where you message started. If your message is \"{example}\", say something like \"tell him '{example}'\""
+        speak_output = f"I'm not sure where your message started. If your message is \"{example}\", say something like \"tell him '{example}'\""
 
         return (
             handler_input.response_builder
