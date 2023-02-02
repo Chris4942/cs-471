@@ -33,6 +33,7 @@ SLOT_LOCATION = 'location'
 SLOT_MESSAGE = 'message'
 SLOT_TELL_MESSAGE = 'tellMessage'
 SLOT_COMPLEX_LOCATION = 'complexLocation'
+SLOT_NUMBER = 'number'
 
 SESSION_LOCATION = 'location'
 SESSION_LAST_REQUEST = 'lastRequest'
@@ -60,20 +61,38 @@ def find_best_match(list, target, matching_fun):
     best_match_score = 0.0
     for item in list:
         score = matching_fun(target, item)
+        logger.info(f"{score}, {item}, {target}")
         if score > best_match_score:
             best_match = item
             best_match_score = score
-    return best_match, score
+    return best_match, best_match_score
 
 def resolve_name_location(location_name):
     members = get('https://slack.com/api/users.list', headers=HEADERS).json()['members']
+    logger.info(f"top of resolve_name_location {location_name}")
     def rate_match(current_location_name, member):
-        if current_location_name.lower() == member["real_name"].lower():
+        current_location_name_lower = current_location_name.lower()
+        real_name = member["real_name"].lower()
+        logger.info(f"names: {current_location_name}, {real_name}. Conditions: {current_location_name.lower()}, {real_name in current_location_name_lower}, {current_location_name_lower in real_name}")
+        if current_location_name_lower == real_name:
             return 1.0
-        if current_location_name.lower() in member["real_name"].lower() or member["real_name"].lower() in current_location_name.lower():
+        if current_location_name_lower in real_name or real_name in current_location_name_lower:
+            logger.info("Reached the code where we return a 0.9")
             return 0.9
         return 0.0
-    return find_best_match(members, location_name, rate_match)[0]
+    return find_best_match(members, location_name, rate_match)
+
+def resolve_simple_channel_location(name):
+    channels = get('https://slack.com/api/conversations.list', headers=HEADERS).json()['channels']
+    def rate_match(current_location_name, member):
+        current_location_name_lower = current_location_name.lower()
+        member_name = member["name"].lower()
+        if current_location_name_lower == member_name:
+            return 1.0
+        if current_location_name_lower in member_name or member_name in current_location_name_lower:
+            return 0.9
+        return 0.0
+    return find_best_match(channels, name, rate_match)
 
 def resolve_channel_location(words):
     channels = get('https://slack.com/api/conversations.list', headers=HEADERS).json()['channels']
@@ -83,7 +102,7 @@ def resolve_channel_location(words):
             if word.lower() in channel["name"].lower() or channel["name"].lower() in word.lower():
                 total_matches += 1
         return total_matches
-    return find_best_match(channels, words, rate_match)[0]
+    return find_best_match(channels, words, rate_match)
 
 def send_message(channel, message):
     return post("https://slack.com/api/chat.postMessage", data={
@@ -142,7 +161,7 @@ class SendMessageIntentHandler(AbstractRequestHandler):
             session_attr[SESSION_LAST_REQUEST] = LAST_REQUEST_LOCATION
             speak_output = "Great! Where would you like to send a message?"
         elif location != None and tellMessage == None and complexLocation == None:
-            member = resolve_name_location(location)
+            member, _ = resolve_name_location(location)
             member_name = member["real_name"]
             session_attr[SESSION_LOCATION] = member
             session_attr[SESSION_LAST_REQUEST] = LAST_REQUEST_MESSAGE
@@ -150,7 +169,7 @@ class SendMessageIntentHandler(AbstractRequestHandler):
         elif location == None and tellMessage != None and complexLocation == None:
             words = tellMessage.split(' ')
             location_name = words[0]
-            member = resolve_name_location(location_name)
+            member, _ = resolve_name_location(location_name)
             message = ' '.join(words[1:])
             speak_output = message_confirmation_string(member, message)
             attributes_of(handler_input)[SESSION_LOCATION] = member
@@ -158,7 +177,7 @@ class SendMessageIntentHandler(AbstractRequestHandler):
             attributes_of(handler_input)[SESSION_MESSAGE] = message
         elif location == None and tellMessage == None and complexLocation != None:
             words = complexLocation.split(' ')
-            location = resolve_channel_location(words)
+            location, _ = resolve_channel_location(words)
             channel_name = location["name"]
             attributes_of(handler_input)[SESSION_LOCATION] = location
             attributes_of(handler_input)[SESSION_LAST_REQUEST] = LAST_REQUEST_MESSAGE
@@ -326,7 +345,26 @@ class ReadMessageIntentHandler(AbstractRequestHandler):
         return is_intent_name("ReadMessageIntent")(handler_input)
     
     def handle(self, handler_input):
-        speak_output = "You've reach the ReadMessageIntent"
+        location = slots_of(handler_input)[SLOT_LOCATION].value
+        complexLocation = slots_of(handler_input)[SLOT_COMPLEX_LOCATION].value
+        number = slots_of(handler_input)[SLOT_NUMBER].value
+        debug_data = f"location: {location}. complexLocation: {complexLocation}. number: {number}"
+        speak_output = f"You've reach the ReadMessageIntent. ${debug_data}"
+        if location != None and number == None and complexLocation == None:
+            name_result = resolve_name_location(location)
+            logger.info(f"name result: {name_result}")
+            name, name_confidence = name_result
+            logger.info(f"name confidence {name_confidence}")
+            channel, channel_confidence = resolve_simple_channel_location(location)
+            logger.info(f"scores: {name}, {name_confidence}. {channel}, {channel_confidence}")
+            source = name if name_confidence > channel_confidence else channel
+            if "is_channel" in source and source["is_channel"]:
+                source_name = source["name"]
+                speak_output = f"Reading message from channel {source_name}. {debug_data}. {name_confidence}. {channel_confidence}"
+            else:
+                source_name = source["real_name"]
+                speak_output = f"Reading message from person named {source_name}. {debug_data}"
+
         return (
             handler_input.response_builder
                 .speak(speak_output)

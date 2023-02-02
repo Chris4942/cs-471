@@ -17,7 +17,11 @@ def post_message(message):
 def get_conversation_list():
     return requests.get('https://slack.com/api/conversations.list', headers=headers)
 
+def get_messages_from(location):
+    return requests.get(f"https://slack.com/api/conversations.history?channel={location}", headers=headers)
+
 # print(get_conversations().json())
 # print(post_message("test direct message").json())
 # print(get_list_of_users().json()["members"])
-print(get_conversation_list().json())
+# print(get_conversation_list().json())
+print(get_messages_from('C04MCPDNC1K').json())
