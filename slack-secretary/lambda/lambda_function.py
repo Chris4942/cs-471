@@ -83,7 +83,9 @@ def resolve_name_location(location_name):
     return find_best_match(members, location_name, rate_match)
 
 def resolve_complex_name_location(words):
-    members = get('https://slack.com/api/users.list', headers=HEADERS).json()['members']
+    json_body = get('https://slack.com/api/users.list', headers=HEADERS).json()
+    logger.info(f"json_body02: {json_body}")
+    members = json_body["members"]
     def rate_match(words, member):
         total_matches = 0
         for word in words:
@@ -119,6 +121,16 @@ def send_message(channel, message):
         "channel": channel,
         "text": message,
     }, headers=HEADERS).json()
+
+def get_messages(conversation_id):
+    json_body = get(f"https://slack.com/api/conversations.history?channel={conversation_id}", headers=HEADERS).json()
+    logger.info(f"json_body: {json_body}")
+    
+    return filter(
+        lambda item: "subtype" not in item,
+        json_body["messages"]
+    )
+
 
 class LaunchRequestHandler(AbstractRequestHandler):
     """Handler for Skill Launch."""
@@ -228,7 +240,7 @@ class SendMessageLocationIntentHandler(AbstractRequestHandler):
 
 def message_confirmation_string(member, message):
     name = None
-    if member["is_channel"]:
+    if "is_channel" in member and member["is_channel"]:
         name = member["name"]
     else:
         name = member["real_name"]
@@ -381,6 +393,16 @@ class ReadMessageIntentHandler(AbstractRequestHandler):
             else:
                 source_name = source["real_name"]
                 speak_output = f"Reading message from person named {source_name}. {debug_data}"
+            messages = get_messages(source["id"])
+            items = [message for message in map(lambda item: {
+                    'message': item["text"],
+                    'sender': item['user']
+
+                }, messages)]
+            
+            logger.info(f"messages: {messages}")
+            logger.info(f"items: {items}")
+            speak_output = f"{speak_output}"
         return (
             handler_input.response_builder
                 .speak(speak_output)
