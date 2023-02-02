@@ -47,6 +47,25 @@ LAST_REQUEST_LOCATION = 'location'
 LAST_REQUEST_MESSAGE = 'message'
 LAST_REQUEST_CONFIRM = 'confirm'
 
+user_cache = {}
+user_cache_populated = False
+
+def get_users():
+    global user_cache_populated
+    if user_cache_populated:
+        return user_cache
+    else:
+        json_body = get('https://slack.com/api/users.list', headers=HEADERS).json()
+        members = json_body["members"]
+        for user in members:
+            user_cache[user['id']] = user
+        user_cache_populated = True
+        return get_users()
+
+def get_user(id):
+    # TODO handle the case where the id isn't present
+    return user_cache[id]
+
 def slots_of(handler_input):
     return handler_input.request_envelope.request.intent.slots
 
@@ -68,8 +87,7 @@ def find_best_match(list, target, matching_fun):
     return best_match, best_match_score
 
 def resolve_name_location(location_name):
-    members = get('https://slack.com/api/users.list', headers=HEADERS).json()['members']
-    logger.info(f"top of resolve_name_location {location_name}")
+    members = get_users().values()
     def rate_match(current_location_name, member):
         current_location_name_lower = current_location_name.lower()
         real_name = member["real_name"].lower()
@@ -83,9 +101,7 @@ def resolve_name_location(location_name):
     return find_best_match(members, location_name, rate_match)
 
 def resolve_complex_name_location(words):
-    json_body = get('https://slack.com/api/users.list', headers=HEADERS).json()
-    logger.info(f"json_body02: {json_body}")
-    members = json_body["members"]
+    members = get_users().values()
     def rate_match(words, member):
         total_matches = 0
         for word in words:
@@ -130,7 +146,6 @@ def get_messages(conversation_id):
         lambda item: "subtype" not in item,
         json_body["messages"]
     )
-
 
 class LaunchRequestHandler(AbstractRequestHandler):
     """Handler for Skill Launch."""
@@ -396,13 +411,14 @@ class ReadMessageIntentHandler(AbstractRequestHandler):
             messages = get_messages(source["id"])
             items = [message for message in map(lambda item: {
                     'message': item["text"],
-                    'sender': item['user']
-
+                    'user_id': item['user']
                 }, messages)]
-            
+            speak_output = ""
             logger.info(f"messages: {messages}")
             logger.info(f"items: {items}")
-            speak_output = f"{speak_output}"
+            for item in items:
+                user = get_user(item['user_id'])['real_name']
+                speak_output = f"{speak_output} {user} said \"{item['message']}\"."
         return (
             handler_input.response_builder
                 .speak(speak_output)
