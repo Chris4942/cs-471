@@ -82,6 +82,16 @@ def resolve_name_location(location_name):
         return 0.0
     return find_best_match(members, location_name, rate_match)
 
+def resolve_complex_name_location(words):
+    members = get('https://slack.com/api/users.list', headers=HEADERS).json()['members']
+    def rate_match(words, member):
+        total_matches = 0
+        for word in words:
+            if word.lower() in member["real_name"].lower() or member["real_name"].lower() in word.lower():
+                total_matches += 1
+        return total_matches
+    return find_best_match(members, words, rate_match)
+
 def resolve_simple_channel_location(name):
     channels = get('https://slack.com/api/conversations.list', headers=HEADERS).json()['channels']
     def rate_match(current_location_name, member):
@@ -343,6 +353,11 @@ class GetSessionIntent(AbstractRequestHandler):
 class ReadMessageIntentHandler(AbstractRequestHandler):
     def can_handle(self, handler_input):
         return is_intent_name("ReadMessageIntent")(handler_input)
+
+    def get_source(self, name_resolver, channel_resolver, index):
+        name, name_confidence = name_resolver(index)
+        channel, channel_confidence = channel_resolver(index)
+        return name if name_confidence > channel_confidence else channel
     
     def handle(self, handler_input):
         location = slots_of(handler_input)[SLOT_LOCATION].value
@@ -350,21 +365,22 @@ class ReadMessageIntentHandler(AbstractRequestHandler):
         number = slots_of(handler_input)[SLOT_NUMBER].value
         debug_data = f"location: {location}. complexLocation: {complexLocation}. number: {number}"
         speak_output = f"You've reach the ReadMessageIntent. ${debug_data}"
-        if location != None and number == None and complexLocation == None:
-            name_result = resolve_name_location(location)
-            logger.info(f"name result: {name_result}")
-            name, name_confidence = name_result
-            logger.info(f"name confidence {name_confidence}")
-            channel, channel_confidence = resolve_simple_channel_location(location)
-            logger.info(f"scores: {name}, {name_confidence}. {channel}, {channel_confidence}")
-            source = name if name_confidence > channel_confidence else channel
+        source_string = location if location != None else complexLocation if complexLocation != None else None
+        logger.info(f"source_string = {source_string}")
+        if source_string != None:
+            words = source_string.split(' ')
+            logger.info(f"words = {words}")
+            source = None
+            if len(words) == 1:
+                source = self.get_source(resolve_name_location, resolve_simple_channel_location, source_string)
+            elif len(words) > 1:
+                source = self.get_source(resolve_complex_name_location, resolve_channel_location, words)
             if "is_channel" in source and source["is_channel"]:
                 source_name = source["name"]
-                speak_output = f"Reading message from channel {source_name}. {debug_data}. {name_confidence}. {channel_confidence}"
+                speak_output = f"Reading message from channel {source_name}. {debug_data}"
             else:
                 source_name = source["real_name"]
                 speak_output = f"Reading message from person named {source_name}. {debug_data}"
-
         return (
             handler_input.response_builder
                 .speak(speak_output)
