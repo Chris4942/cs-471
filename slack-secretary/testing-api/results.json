@@ -1,0 +1,128 @@
+{
+    "ok": True,
+    "channels": [
+        {
+            "id": "C04MCPDNC1K",
+            "name": "general",
+            "is_channel": True,
+            "is_group": False,
+            "is_im": False,
+            "is_mpim": False,
+            "is_private": False,
+            "created": 1675218977,
+            "is_archived": False,
+            "is_general": True,
+            "unlinked": 0,
+            "name_normalized": "general",
+            "is_shared": False,
+            "is_org_shared": False,
+            "is_pending_ext_shared": False,
+            "pending_shared": [],
+            "context_team_id": "T04N5CL1K88",
+            "updated": 1675218977279,
+            "parent_conversation": None,
+            "creator": "U04MFMJ777C",
+            "is_ext_shared": False,
+            "shared_team_ids": [
+                "T04N5CL1K88"
+            ],
+            "pending_connected_team_ids": [],
+            "is_member": False,
+            "topic": {
+                "value": "",
+                "creator": "",
+                "last_set": 0
+            },
+            "purpose": {
+                "value": "This is the one channel that will always include everyone. It’s a great spot for announcements and team-wide conversations.",
+                "creator": "U04MFMJ777C",
+                "last_set": 1675218977
+            },
+            "previous_names": [],
+            "num_members": 1
+        },
+        {
+            "id": "C04MJ62A7QU",
+            "name": "random",
+            "is_channel": True,
+            "is_group": False,
+            "is_im": False,
+            "is_mpim": False,
+            "is_private": False,
+            "created": 1675218977,
+            "is_archived": False,
+            "is_general": False,
+            "unlinked": 0,
+            "name_normalized": "random",
+            "is_shared": False,
+            "is_org_shared": False,
+            "is_pending_ext_shared": False,
+            "pending_shared": [],
+            "context_team_id": "T04N5CL1K88",
+            "updated": 1675218977514,
+            "parent_conversation": None,
+            "creator": "U04MFMJ777C",
+            "is_ext_shared": False,
+            "shared_team_ids": [
+                "T04N5CL1K88"
+            ],
+            "pending_connected_team_ids": [],
+            "is_member": False,
+            "topic": {
+                "value": "",
+                "creator": "",
+                "last_set": 0
+            },
+            "purpose": {
+                "value": "This channel is for... well, everything else. It’s a place for team jokes, spur-of-the-moment ideas, and funny GIFs. Go wild!",
+                "creator": "U04MFMJ777C",
+                "last_set": 1675218977
+            },
+            "previous_names": [],
+            "num_members": 1
+        },
+        {
+            "id": "C04MUB1BURF",
+            "name": "alexa-test",
+            "is_channel": True,
+            "is_group": False,
+            "is_im": False,
+            "is_mpim": False,
+            "is_private": False,
+            "created": 1675219022,
+            "is_archived": False,
+            "is_general": False,
+            "unlinked": 0,
+            "name_normalized": "alexa-test",
+            "is_shared": False,
+            "is_org_shared": False,
+            "is_pending_ext_shared": False,
+            "pending_shared": [],
+            "context_team_id": "T04N5CL1K88",
+            "updated": 1675219022522,
+            "parent_conversation": None,
+            "creator": "U04MFMJ777C",
+            "is_ext_shared": False,
+            "shared_team_ids": [
+                "T04N5CL1K88"
+            ],
+            "pending_connected_team_ids": [],
+            "is_member": False,
+            "topic": {
+                "value": "",
+                "creator": "",
+                "last_set": 0
+            },
+            "purpose": {
+                "value": "This channel is for everything #alexa-test. Hold meetings, share docs, and make decisions together with your team.",
+                "creator": "U04MFMJ777C",
+                "last_set": 1675219022
+            },
+            "previous_names": [],
+            "num_members": 1
+        }
+    ],
+    "response_metadata": {
+        "next_cursor": ""
+    }
+}

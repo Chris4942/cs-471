@@ -1,0 +1,102 @@
+{
+    "ok": True,
+    "messages": [
+        {
+            "type": "message",
+            "subtype": "channel_join",
+            "ts": "1675302470.668249",
+            "user": "U04MUCS901F",
+            "text": "<@U04MUCS901F> has joined the channel",
+            "inviter": "U04MFMJ777C"
+        },
+        {
+            "bot_id": "B04M17L97N3",
+            "type": "message",
+            "text": "I think it's working",
+            "user": "U04MUCS901F",
+            "ts": "1675238530.397209",
+            "app_id": "A04M178RC5V",
+            "blocks": [
+                {
+                    "type": "rich_text",
+                    "block_id": "zMr",
+                    "elements": [
+                        {
+                            "type": "rich_text_section",
+                            "elements": [
+                                {
+                                    "type": "text",
+                                    "text": "I think it's working"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ],
+            "team": "T04N5CL1K88",
+            "bot_profile": {
+                "id": "B04M17L97N3",
+                "deleted": False,
+                "name": "alexa-app",
+                "updated": 1675220264,
+                "app_id": "A04M178RC5V",
+                "icons": {
+                    "image_36": "https://a.slack-edge.com/80588/img/plugins/app/bot_36.png",
+                    "image_48": "https://a.slack-edge.com/80588/img/plugins/app/bot_48.png",
+                    "image_72": "https://a.slack-edge.com/80588/img/plugins/app/service_72.png"
+                },
+                "team_id": "T04N5CL1K88"
+            }
+        },
+        {
+            "bot_id": "B04M17L97N3",
+            "type": "message",
+            "text": "test",
+            "user": "U04MUCS901F",
+            "ts": "1675220780.303999",
+            "app_id": "A04M178RC5V",
+            "blocks": [
+                {
+                    "type": "rich_text",
+                    "block_id": "=7/",
+                    "elements": [
+                        {
+                            "type": "rich_text_section",
+                            "elements": [
+                                {
+                                    "type": "text",
+                                    "text": "test"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ],
+            "team": "T04N5CL1K88",
+            "bot_profile": {
+                "id": "B04M17L97N3",
+                "app_id": "A04M178RC5V",
+                "name": "alexa-app",
+                "icons": {
+                    "image_36": "https://a.slack-edge.com/80588/img/plugins/app/bot_36.png",
+                    "image_48": "https://a.slack-edge.com/80588/img/plugins/app/bot_48.png",
+                    "image_72": "https://a.slack-edge.com/80588/img/plugins/app/service_72.png"
+                },
+                "deleted": False,
+                "updated": 1675220264,
+                "team_id": "T04N5CL1K88"
+            }
+        },
+        {
+            "type": "message",
+            "subtype": "channel_join",
+            "ts": "1675218977.435699",
+            "user": "U04MFMJ777C",
+            "text": "<@U04MFMJ777C> has joined the channel"
+        }
+    ],
+    "has_more": False,
+    "pin_count": 0,
+    "channel_actions_ts": None,
+    "channel_actions_count": 0
+}
