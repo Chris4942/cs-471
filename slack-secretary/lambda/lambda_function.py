@@ -40,12 +40,14 @@ SESSION_LAST_REQUEST = 'lastRequest'
 SESSION_GOAL = 'goal'
 SESSION_MESSAGE = 'message'
 SESSION_LAST_HANDLER = 'lastHandler'
+SESSION_ITEMS = 'items'
 
 MESSAGE_REQUEST = 'messageRequest'
 SEND_MESSAGE_GOAL = 'sendMessage'
 LAST_REQUEST_LOCATION = 'location'
 LAST_REQUEST_MESSAGE = 'message'
 LAST_REQUEST_CONFIRM = 'confirm'
+LAST_REQUEST_NUMBER = 'number'
 
 user_cache = {}
 user_cache_populated = False
@@ -378,6 +380,8 @@ class GetSessionIntent(AbstractRequestHandler):
         )
 
 class ReadMessageIntentHandler(AbstractRequestHandler):
+    LAST_HANDLER_VALUE = "ReaddMessageIntentHandler"
+
     def can_handle(self, handler_input):
         return is_intent_name("ReadMessageIntent")(handler_input)
 
@@ -416,9 +420,15 @@ class ReadMessageIntentHandler(AbstractRequestHandler):
             speak_output = ""
             logger.info(f"messages: {messages}")
             logger.info(f"items: {items}")
-            for item in items:
-                user = get_user(item['user_id'])['real_name']
-                speak_output = f"{speak_output} {user} said \"{item['message']}\"."
+            if len(items) > 3:
+                attributes_of(handler_input)[SESSION_LAST_REQUEST] = LAST_REQUEST_NUMBER
+                attributes_of(handler_input)[SESSION_LAST_HANDLER] = ReadMessageIntentHandler.LAST_HANDLER_VALUE
+                attributes_of(handler_input)[SESSION_ITEMS] = items
+                speak_output = f"I found {len(items)} messages. How many recent messages would you like me to read?"
+            else:
+                for item in items:
+                    user = get_user(item['user_id'])['real_name']
+                    speak_output = f"{speak_output} {user} said \"{item['message']}\"."
         return (
             handler_input.response_builder
                 .speak(speak_output)
