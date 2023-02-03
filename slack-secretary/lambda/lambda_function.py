@@ -436,6 +436,24 @@ class ReadMessageIntentHandler(AbstractRequestHandler):
                 .response
         )
 
+class ReadMessageProvideNumberIntentHandler(AbstractRequestHandler):
+    def can_handle(self, handler_input):
+        return attributes_of(handler_input)[SESSION_LAST_HANDLER] == ReadMessageIntentHandler.LAST_HANDLER_VALUE and is_intent_name("ProvideNumberIntent")(handler_input)
+    
+    def handle(self, handler_input):
+        number = int(slots_of(handler_input)[SLOT_NUMBER].value)
+        items = attributes_of(handler_input)[SESSION_ITEMS]
+        logger.info(f"number type: {type(number)}")
+        logger.info(f"items: {items[len(items) - number:]}")
+        speak_output = f"You've successfully provided the number {number}"
+        return (
+            handler_input.response_builder
+                .speak(speak_output)
+                .ask(speak_output)
+                .response
+        )
+
+
 class HelpIntentHandler(AbstractRequestHandler):
     """Handler for Help Intent."""
     def can_handle(self, handler_input):
@@ -539,11 +557,11 @@ sb.add_request_handler(SendMessageIntentCatcher())
 sb.add_request_handler(ConfirmMessageNoIntentHandler())
 sb.add_request_handler(ConfirmMessageYesIntentHandler())
 sb.add_request_handler(ReadMessageIntentHandler())
+sb.add_request_handler(ReadMessageProvideNumberIntentHandler())
 sb.add_request_handler(HelpIntentHandler())
 sb.add_request_handler(CancelOrStopIntentHandler())
 sb.add_request_handler(FallbackIntentHandler())
 sb.add_request_handler(SessionEndedRequestHandler())
-sb.add_request_handler(HelloWorldIntentHandler())
 sb.add_request_handler(IntentReflectorHandler()) # make sure IntentReflectorHandler is last so it doesn't override your custom intent handlers
 
 sb.add_exception_handler(CatchAllExceptionHandler())
