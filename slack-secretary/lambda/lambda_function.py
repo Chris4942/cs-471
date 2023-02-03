@@ -65,8 +65,13 @@ def get_users():
         return get_users()
 
 def get_user(id):
-    # TODO handle the case where the id isn't present
+    if id not in user_cache:
+        # response_json = get(f"https://slack.com/api/users.info?user={id}").json()
+        # logger.info(f"response_json002 {response_json}")
+        # user_cache[id] = response_json['user']
+        get_users()
     return user_cache[id]
+
 
 def slots_of(handler_input):
     return handler_input.request_envelope.request.intent.slots
@@ -445,7 +450,11 @@ class ReadMessageProvideNumberIntentHandler(AbstractRequestHandler):
         items = attributes_of(handler_input)[SESSION_ITEMS]
         logger.info(f"number type: {type(number)}")
         logger.info(f"items: {items[len(items) - number:]}")
-        speak_output = f"You've successfully provided the number {number}"
+        items = items[len(items) - number:]
+        speak_output = ""
+        for item in items:
+            user = get_user(item['user_id'])['real_name']
+            speak_output = f"{speak_output} {user} said \"{item['message']}\"."
         return (
             handler_input.response_builder
                 .speak(speak_output)
