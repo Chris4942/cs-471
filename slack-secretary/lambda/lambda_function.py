@@ -32,6 +32,8 @@ PROVIDE_MESSAGE_INTENT = 'ProvideMessageIntent'
 AMAZON_CANCEL_INTENT = "AMAZON.CancelIntent"
 AMAZON_STOP_INTENT = "AMAZON.StopIntent"
 
+MAX_MESSAGE_READOUT = 3
+
 SLOT_LOCATION = 'location'
 SLOT_MESSAGE = 'message'
 SLOT_TELL_MESSAGE = 'tellMessage'
@@ -46,6 +48,7 @@ SESSION_GOAL = 'goal'
 SESSION_MESSAGE = 'message'
 SESSION_LAST_HANDLER = 'lastHandler'
 SESSION_ITEMS = 'items'
+SESSION_CONVERSATION_ID = 'sessionConversationId'
 
 MESSAGE_REQUEST = 'messageRequest'
 SEND_MESSAGE_GOAL = 'sendMessage'
@@ -155,6 +158,7 @@ def get_messages(conversation_id, start_time, end_time):
         url += f"&oldest={start_time}"
     if end_time != None:
         url += f"&latest={end_time}"
+    logger.info(f"getting messages from url: {url}")
     json_body = get(url, headers=HEADERS).json()
     logger.info(f"json_body: {json_body}")
     
@@ -445,10 +449,11 @@ class ReadMessageIntentHandler(AbstractRequestHandler):
             speak_output = ""
             logger.info(f"messages: {messages}")
             logger.info(f"items: {items}")
-            if len(items) > 3:
+            if len(items) > MAX_MESSAGE_READOUT:
                 attributes_of(handler_input)[SESSION_LAST_REQUEST] = LAST_REQUEST_NUMBER
                 attributes_of(handler_input)[SESSION_LAST_HANDLER] = ReadMessageIntentHandler.LAST_HANDLER_VALUE
                 attributes_of(handler_input)[SESSION_ITEMS] = items
+                attributes_of(handler_input)[SESSION_CONVERSATION_ID] = source['id']
                 speak_output = f"I found {len(items)} messages. How many recent messages would you like me to read?"
             else:
                 for item in items:
@@ -475,6 +480,47 @@ class ReadMessageProvideNumberIntentHandler(AbstractRequestHandler):
         for item in items:
             user = get_user(item['user_id'])['real_name']
             speak_output = f"{speak_output} {user} said \"{item['message']}\"."
+        return (
+            handler_input.response_builder
+                .speak(speak_output)
+                .ask(speak_output)
+                .response
+        )
+
+class ReadMessageProvideTimeBoundingIntentHandler(AbstractRequestHandler):
+    def can_handle(self, handler_input):
+        return (
+            attributes_of(handler_input)[SESSION_LAST_REQUEST] == LAST_REQUEST_NUMBER
+            and attributes_of(handler_input)[SESSION_LAST_HANDLER] == ReadMessageIntentHandler.LAST_HANDLER_VALUE
+            and is_intent_name("ProvideTimeBoundingIntent")(handler_input)
+        )
+
+    def handle(self, handler_input):
+        start_time = slots_of(handler_input)[SLOT_START_TIME].value
+        end_time = slots_of(handler_input)[SLOT_END_TIME].value
+        if start_time != None:
+            start_time = convert_time_to_ms(start_time)
+        if end_time != None:
+            end_time = convert_time_to_ms(end_time)
+        logger.info(f"start_time: {start_time}. end_time: {end_time}")
+        conversation_id = attributes_of(handler_input)[SESSION_CONVERSATION_ID]
+        messages = get_messages(conversation_id, start_time, end_time)
+        items = [message for message in map(lambda item: {
+                'message': item["text"],
+                'user_id': item['user']
+            }, messages)]
+
+        speak_output=""
+        if len(items) > MAX_MESSAGE_READOUT:
+                attributes_of(handler_input)[SESSION_LAST_REQUEST] = LAST_REQUEST_NUMBER
+                attributes_of(handler_input)[SESSION_LAST_HANDLER] = ReadMessageIntentHandler.LAST_HANDLER_VALUE
+                attributes_of(handler_input)[SESSION_ITEMS] = items
+                speak_output = f"I found {len(items)} messages. How many recent messages would you like me to read?"
+        else:
+            for item in items:
+                user = get_user(item['user_id'])['real_name']
+                speak_output = f"{speak_output} {user} said \"{item['message']}\"."
+        
         return (
             handler_input.response_builder
                 .speak(speak_output)
@@ -586,6 +632,7 @@ sb.add_request_handler(ConfirmMessageNoIntentHandler())
 sb.add_request_handler(ConfirmMessageYesIntentHandler())
 sb.add_request_handler(ReadMessageIntentHandler())
 sb.add_request_handler(ReadMessageProvideNumberIntentHandler())
+sb.add_request_handler(ReadMessageProvideTimeBoundingIntentHandler())
 sb.add_request_handler(HelpIntentHandler())
 sb.add_request_handler(CancelOrStopIntentHandler())
 sb.add_request_handler(FallbackIntentHandler())
