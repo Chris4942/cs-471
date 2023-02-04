@@ -6,6 +6,7 @@
 # This sample is built using the handler classes approach in skill builder.
 import logging
 import ask_sdk_core.utils as ask_utils
+import re
 
 from ask_sdk_core.skill_builder import SkillBuilder
 from ask_sdk_core.dispatch_components import AbstractRequestHandler
@@ -13,6 +14,8 @@ from ask_sdk_core.dispatch_components import AbstractExceptionHandler
 from ask_sdk_core.handler_input import HandlerInput
 
 from ask_sdk_model import Response
+from datetime import date
+from dateutil.parser import isoparse
 
 import json
 import traceback
@@ -34,6 +37,8 @@ SLOT_MESSAGE = 'message'
 SLOT_TELL_MESSAGE = 'tellMessage'
 SLOT_COMPLEX_LOCATION = 'complexLocation'
 SLOT_NUMBER = 'number'
+SLOT_START_TIME = 'startTime'
+SLOT_END_TIME = 'endTime'
 
 SESSION_LOCATION = 'location'
 SESSION_LAST_REQUEST = 'lastRequest'
@@ -66,15 +71,14 @@ def get_users():
 
 def get_user(id):
     if id not in user_cache:
-        # response_json = get(f"https://slack.com/api/users.info?user={id}").json()
-        # logger.info(f"response_json002 {response_json}")
-        # user_cache[id] = response_json['user']
         get_users()
     return user_cache[id]
 
-
 def slots_of(handler_input):
     return handler_input.request_envelope.request.intent.slots
+
+def slot_details(handler_input):
+    return handler_input.request_envelope.request.intent
 
 def attributes_of(handler_input):
     return handler_input.attributes_manager.session_attributes
@@ -145,14 +149,37 @@ def send_message(channel, message):
         "text": message,
     }, headers=HEADERS).json()
 
-def get_messages(conversation_id):
-    json_body = get(f"https://slack.com/api/conversations.history?channel={conversation_id}", headers=HEADERS).json()
+def get_messages(conversation_id, start_time, end_time):
+    url = f"https://slack.com/api/conversations.history?channel={conversation_id}"
+    if start_time != None:
+        url += f"&oldest={start_time}"
+    if end_time != None:
+        url += f"&latest={end_time}"
+    json_body = get(url, headers=HEADERS).json()
     logger.info(f"json_body: {json_body}")
     
     return filter(
         lambda item: "subtype" not in item,
         json_body["messages"]
     )
+
+time_literals = {
+    "NI": "19:00",
+    "MO": "07:00",
+    "AF": "12:00",
+    "EV": "05:00",
+}
+
+time_reg_ex = re.compile("\d\d:\d\d")
+
+def convert_time_to_ms(time):
+    if not time_reg_ex.match(time):
+        time = time_literals[time]
+    today = date.today()
+    today_string = today.isoformat()
+    time_string = f"{today_string}T{time}"
+    logger.info(f"converting time_string: {time_string}. today_string: {today_string}")
+    return isoparse(time_string).timestamp()
 
 class LaunchRequestHandler(AbstractRequestHandler):
     """Handler for Skill Launch."""
@@ -169,21 +196,6 @@ class LaunchRequestHandler(AbstractRequestHandler):
             handler_input.response_builder
                 .speak(speak_output)
                 .ask(speak_output)
-                .response
-        )
-
-class HelloWorldIntentHandler(AbstractRequestHandler):
-    """Handler for Hello World Intent."""
-    def can_handle(self, handler_input):
-        # type: (HandlerInput) -> bool
-        return is_intent_name("HelloWorldIntent")(handler_input)
-
-    def handle(self, handler_input):
-        speak_output = "Hello World!"
-        
-        return (
-            handler_input.response_builder
-                .speak(speak_output)
                 .response
         )
 
@@ -397,11 +409,19 @@ class ReadMessageIntentHandler(AbstractRequestHandler):
     
     def handle(self, handler_input):
         location = slots_of(handler_input)[SLOT_LOCATION].value
-        complexLocation = slots_of(handler_input)[SLOT_COMPLEX_LOCATION].value
         number = slots_of(handler_input)[SLOT_NUMBER].value
-        debug_data = f"location: {location}. complexLocation: {complexLocation}. number: {number}"
+        start_time = slots_of(handler_input)[SLOT_START_TIME].value
+        end_time = slots_of(handler_input)[SLOT_END_TIME].value
+        if start_time != None:
+            start_time = convert_time_to_ms(start_time)
+        if end_time != None:
+            end_time = convert_time_to_ms(end_time)
+        logger.info(f"startTime = {start_time}")
+        logger.info(f"endTime = {end_time}")
+        logger.info(f"{slot_details(handler_input)}")
+        debug_data = f"location: {location}. number: {number}"
         speak_output = f"You've reach the ReadMessageIntent. ${debug_data}"
-        source_string = location if location != None else complexLocation if complexLocation != None else None
+        source_string = location if location != None else None
         logger.info(f"source_string = {source_string}")
         if source_string != None:
             words = source_string.split(' ')
@@ -417,7 +437,7 @@ class ReadMessageIntentHandler(AbstractRequestHandler):
             else:
                 source_name = source["real_name"]
                 speak_output = f"Reading message from person named {source_name}. {debug_data}"
-            messages = get_messages(source["id"])
+            messages = get_messages(source["id"], start_time, end_time)
             items = [message for message in map(lambda item: {
                     'message': item["text"],
                     'user_id': item['user']
@@ -461,7 +481,6 @@ class ReadMessageProvideNumberIntentHandler(AbstractRequestHandler):
                 .ask(speak_output)
                 .response
         )
-
 
 class HelpIntentHandler(AbstractRequestHandler):
     """Handler for Help Intent."""
