@@ -14,7 +14,7 @@ from ask_sdk_core.dispatch_components import AbstractExceptionHandler
 from ask_sdk_core.handler_input import HandlerInput
 
 from ask_sdk_model import Response
-from datetime import date
+from datetime import date, datetime
 from dateutil.parser import isoparse
 
 import json
@@ -28,9 +28,13 @@ logger.setLevel(logging.INFO)
 # TODO the token is below is for an inconsequential slack workspace. This would need to be done differently if this were ever used in production
 HEADERS = {"Authorization": "Bearer xoxb-4753428053280-4742434306049-9soWlaebmTXMm2XkZRbfQLJL"}
 
+INFO_MESSAGE = "I can send a message or read messages to you. What would you like me to do?"
+
 PROVIDE_MESSAGE_INTENT = 'ProvideMessageIntent'
 AMAZON_CANCEL_INTENT = "AMAZON.CancelIntent"
 AMAZON_STOP_INTENT = "AMAZON.StopIntent"
+PROVIDE_NUMBER_INTENT = 'ProvideNumberIntent'
+ALL_INTENT = 'AllIntent'
 
 MAX_MESSAGE_READOUT = 3
 
@@ -41,6 +45,8 @@ SLOT_COMPLEX_LOCATION = 'complexLocation'
 SLOT_NUMBER = 'number'
 SLOT_START_TIME = 'startTime'
 SLOT_END_TIME = 'endTime'
+SLOT_START_DATE = 'startDate'
+SLOT_END_DATE = 'endDate'
 
 SESSION_LOCATION = 'location'
 SESSION_LAST_REQUEST = 'lastRequest'
@@ -52,6 +58,7 @@ SESSION_CONVERSATION_ID = 'sessionConversationId'
 
 MESSAGE_REQUEST = 'messageRequest'
 SEND_MESSAGE_GOAL = 'sendMessage'
+READ_MESSAGE_GOAL = 'readMessage'
 LAST_REQUEST_LOCATION = 'location'
 LAST_REQUEST_MESSAGE = 'message'
 LAST_REQUEST_CONFIRM = 'confirm'
@@ -167,7 +174,7 @@ def get_messages(conversation_id, start_time, end_time):
     json_body = get(url, headers=HEADERS).json()
     logger.info(f"messages response body: {json_body}")
 
-    if json_body['error'] == 'channel_not_found':
+    if 'error' in json_body and json_body['error'] == 'channel_not_found':
         raise ChannelNotFoundException(f"Unable to find channel with id {conversation_id}")
     
     return filter(
@@ -184,14 +191,18 @@ time_literals = {
 
 time_reg_ex = re.compile("\d\d:\d\d")
 
-def convert_time_to_ms(time):
-    if not time_reg_ex.match(time):
-        time = time_literals[time]
-    today = date.today()
-    today_string = today.isoformat()
-    time_string = f"{today_string}T{time}"
-    logger.info(f"converting time_string: {time_string}. today_string: {today_string}")
-    return isoparse(time_string).timestamp()
+def convert_time_to_ms(date, time):
+    if date == None and time == None:
+        return None
+    logger.info(f"convert_time_to_ms.time = {time}")
+    time_string = '00:00' if time == None else time_literals[time] if time_reg_ex.match(time) else time
+    date_string = date.today().isoformat() if date == None else date
+    date_time_string = f"{date_string}T{time_string}"
+    logger.info(f"converting date_time_string: {date_time_string}. today_string: {date_string}")
+    timestamp = isoparse(date_time_string).timestamp()
+    if timestamp > datetime.now().timestamp():
+        timestamp -= (24 * 60 * 60)
+    return timestamp
 
 class LaunchRequestHandler(AbstractRequestHandler):
     """Handler for Skill Launch."""
@@ -202,7 +213,7 @@ class LaunchRequestHandler(AbstractRequestHandler):
 
     def handle(self, handler_input):
         # type: (HandlerInput) -> Response
-        speak_output = "Welcome, you can ask me to send a message to someone for you or you can ask me to read messages from a channel or user. What would you like me to do?"
+        speak_output = "Welcome, you can ask me to send a message to someone for you or you can ask me to read messages from a channel. What would you like me to do?"
 
         return (
             handler_input.response_builder
@@ -264,6 +275,7 @@ class SendMessageLocationIntentHandler(AbstractRequestHandler):
         return (
             SESSION_LAST_REQUEST in attributes_of(handler_input) 
             and attributes_of(handler_input)[SESSION_LAST_REQUEST] == LAST_REQUEST_LOCATION
+            and attributes_of(handler_input)[SESSION_GOAL] == SEND_MESSAGE_GOAL
         )
 
 
@@ -408,65 +420,62 @@ class GetSessionIntent(AbstractRequestHandler):
                 .response
         )
 
+def get_source(name_resolver, channel_resolver, index):
+    name, name_confidence = name_resolver(index)
+    channel, channel_confidence = channel_resolver(index)
+    return name if name_confidence > channel_confidence else channel
+
+def coordinate_message_getting(source_string, start_date_time, end_date_time):
+    words = source_string.split(' ')
+    logger.info(f"words = {words}")
+    source = None
+    if len(words) == 1:
+        source = get_source(resolve_name_location, resolve_simple_channel_location, source_string)
+    elif len(words) > 1:
+        source = get_source(resolve_complex_name_location, resolve_channel_location, words)
+    messages = get_messages(source["id"], start_date_time, end_date_time)
+    items = [message for message in map(lambda item: {
+            'message': item["text"],
+            'user_id': item['user']
+        }, messages)]
+    return items, source
+
 class ReadMessageIntentHandler(AbstractRequestHandler):
     LAST_HANDLER_VALUE = "ReaddMessageIntentHandler"
 
     def can_handle(self, handler_input):
         return is_intent_name("ReadMessageIntent")(handler_input)
 
-    def get_source(self, name_resolver, channel_resolver, index):
-        name, name_confidence = name_resolver(index)
-        channel, channel_confidence = channel_resolver(index)
-        return name if name_confidence > channel_confidence else channel
     
     def handle(self, handler_input):
         location = slots_of(handler_input)[SLOT_LOCATION].value
         number = slots_of(handler_input)[SLOT_NUMBER].value
         start_time = slots_of(handler_input)[SLOT_START_TIME].value
         end_time = slots_of(handler_input)[SLOT_END_TIME].value
-        if start_time != None:
-            start_time = convert_time_to_ms(start_time)
-        if end_time != None:
-            end_time = convert_time_to_ms(end_time)
-        logger.info(f"startTime = {start_time}")
-        logger.info(f"endTime = {end_time}")
+        start_date = slots_of(handler_input)[SLOT_START_DATE].value
+        end_date = slots_of(handler_input)[SLOT_END_DATE].value
+        start_date_time = convert_time_to_ms(start_date, start_time)
+        end_date_time = convert_time_to_ms(end_date, end_time)
         logger.info(f"{slot_details(handler_input)}")
         debug_data = f"location: {location}. number: {number}"
         speak_output = f"You've reach the ReadMessageIntent. ${debug_data}"
         source_string = location if location != None else None
         logger.info(f"source_string = {source_string}")
+        attributes_of(handler_input)[SESSION_GOAL] = READ_MESSAGE_GOAL
         if source_string != None:
-            words = source_string.split(' ')
-            logger.info(f"words = {words}")
-            source = None
-            if len(words) == 1:
-                source = self.get_source(resolve_name_location, resolve_simple_channel_location, source_string)
-            elif len(words) > 1:
-                source = self.get_source(resolve_complex_name_location, resolve_channel_location, words)
-            if "is_channel" in source and source["is_channel"]:
-                source_name = source["name"]
-                speak_output = f"Reading message from channel {source_name}. {debug_data}"
-            else:
-                source_name = source["real_name"]
-                speak_output = f"Reading message from person named {source_name}. {debug_data}"
-            messages = get_messages(source["id"], start_time, end_time)
-            items = [message for message in map(lambda item: {
-                    'message': item["text"],
-                    'user_id': item['user']
-                }, messages)]
+            items, source = coordinate_message_getting(source_string, start_date_time, end_date_time)
             speak_output = ""
-            logger.info(f"messages: {messages}")
-            logger.info(f"items: {items}")
             if len(items) > MAX_MESSAGE_READOUT:
                 attributes_of(handler_input)[SESSION_LAST_REQUEST] = LAST_REQUEST_NUMBER
-                attributes_of(handler_input)[SESSION_LAST_HANDLER] = ReadMessageIntentHandler.LAST_HANDLER_VALUE
                 attributes_of(handler_input)[SESSION_ITEMS] = items
                 attributes_of(handler_input)[SESSION_CONVERSATION_ID] = source['id']
-                speak_output = f"I found {len(items)} messages. How many recent messages would you like me to read?"
+                speak_output = f"I found {len(items)} messages. How many recent messages would you like me to read or what time range would you like to me to read messages in?"
             else:
-                for item in items:
-                    user = get_user(item['user_id'])['real_name']
-                    speak_output = f"{speak_output} {user} said \"{item['message']}\"."
+                speak_output = compile_items_into_speak_output(items)
+        else:
+            speak_output = "What channel would you like me to read messages from?"
+            attributes_of(handler_input)[SESSION_LAST_REQUEST] = LAST_REQUEST_LOCATION
+        attributes_of(handler_input)[SESSION_LAST_HANDLER] = ReadMessageIntentHandler.LAST_HANDLER_VALUE
         return (
             handler_input.response_builder
                 .speak(speak_output)
@@ -474,20 +483,63 @@ class ReadMessageIntentHandler(AbstractRequestHandler):
                 .response
         )
 
+class ReadMessageLocationIntentHandler(AbstractRequestHandler):
+    LAST_HANDLER_VALUE = "ReadMessageLocationIntentHandler"
+    def can_handle(self, handler_input):
+        return (
+            SESSION_LAST_REQUEST in attributes_of(handler_input) 
+            and attributes_of(handler_input)[SESSION_LAST_REQUEST] == LAST_REQUEST_LOCATION
+            and attributes_of(handler_input)[SESSION_GOAL] == READ_MESSAGE_GOAL
+        )
+
+    def handle(self, handler_input):
+        location = slots_of(handler_input)[SLOT_LOCATION].value
+        items, source = coordinate_message_getting(location, None, None)
+        speak_output = "" 
+        if len(items) > MAX_MESSAGE_READOUT:
+            attributes_of(handler_input)[SESSION_LAST_REQUEST] = LAST_REQUEST_NUMBER
+            attributes_of(handler_input)[SESSION_ITEMS] = items
+            attributes_of(handler_input)[SESSION_CONVERSATION_ID] = source['id']
+            speak_output = f"I found {len(items)} messages. How many recent messages would you like me to read or what time range would you like to me to read messages in?"
+        else:
+            speak_output = compile_items_into_speak_output(items)
+        attributes_of(handler_input)[SESSION_LAST_HANDLER] = ReadMessageLocationIntentHandler.LAST_HANDLER_VALUE
+        return (
+            handler_input.response_builder
+                .speak(speak_output)
+                .ask(speak_output)
+                .response
+        )
+
+def compile_items_into_speak_output(items):
+    speak_output = ""
+    for item in reversed(items):
+        user = get_user(item['user_id'])['real_name']
+        speak_output = f"{speak_output} {user} said \"{item['message']}\"."
+    return speak_output
+
 class ReadMessageProvideNumberIntentHandler(AbstractRequestHandler):
     def can_handle(self, handler_input):
-        return attributes_of(handler_input)[SESSION_LAST_HANDLER] == ReadMessageIntentHandler.LAST_HANDLER_VALUE and is_intent_name("ProvideNumberIntent")(handler_input)
+        return (
+            attributes_of(handler_input)[SESSION_LAST_REQUEST] == LAST_REQUEST_NUMBER
+            and (
+                is_intent_name(PROVIDE_NUMBER_INTENT)(handler_input)
+                or is_intent_name(ALL_INTENT)
+            )
+        )
     
     def handle(self, handler_input):
-        number = int(slots_of(handler_input)[SLOT_NUMBER].value)
         items = attributes_of(handler_input)[SESSION_ITEMS]
+        number = (int(slots_of(handler_input)[SLOT_NUMBER].value) if is_intent_name(PROVIDE_NUMBER_INTENT)(handler_input)
+            else len(items) if is_intent_name(ALL_INTENT)
+            else None
+        )
+        if number == None:
+            raise Exception("I don't know how this happened, but I certainly didn't prepare for it")
         logger.info(f"number type: {type(number)}")
         logger.info(f"items: {items[len(items) - number:]}")
         items = items[len(items) - number:]
-        speak_output = ""
-        for item in items:
-            user = get_user(item['user_id'])['real_name']
-            speak_output = f"{speak_output} {user} said \"{item['message']}\"."
+        speak_output = compile_items_into_speak_output(items)
         return (
             handler_input.response_builder
                 .speak(speak_output)
@@ -506,13 +558,13 @@ class ReadMessageProvideTimeBoundingIntentHandler(AbstractRequestHandler):
     def handle(self, handler_input):
         start_time = slots_of(handler_input)[SLOT_START_TIME].value
         end_time = slots_of(handler_input)[SLOT_END_TIME].value
-        if start_time != None:
-            start_time = convert_time_to_ms(start_time)
-        if end_time != None:
-            end_time = convert_time_to_ms(end_time)
+        start_date = slots_of(handler_input)[SLOT_START_DATE].value
+        end_date = slots_of(handler_input)[SLOT_END_DATE].value
+        start_date_time = convert_time_to_ms(start_date, start_time)
+        end_date_time = convert_time_to_ms(end_date, end_time)
         logger.info(f"start_time: {start_time}. end_time: {end_time}")
         conversation_id = attributes_of(handler_input)[SESSION_CONVERSATION_ID]
-        messages = get_messages(conversation_id, start_time, end_time)
+        messages = get_messages(conversation_id, start_date_time, end_date_time)
         items = [message for message in map(lambda item: {
                 'message': item["text"],
                 'user_id': item['user']
@@ -525,9 +577,7 @@ class ReadMessageProvideTimeBoundingIntentHandler(AbstractRequestHandler):
             attributes_of(handler_input)[SESSION_ITEMS] = items
             speak_output = f"I found {len(items)} messages. How many recent messages would you like me to read?"
         else:
-            for item in items:
-                user = get_user(item['user_id'])['real_name']
-                speak_output = f"{speak_output} {user} said \"{item['message']}\"."
+            speak_output = compile_items_into_speak_output(items)
         
         return (
             handler_input.response_builder
@@ -542,7 +592,7 @@ class HelpIntentHandler(AbstractRequestHandler):
         return is_intent_name("AMAZON.HelpIntent")(handler_input)
 
     def handle(self, handler_input):
-        speak_output = "You can say hello to me! How can I help?"
+        speak_output = INFO_MESSAGE
 
         return (
             handler_input.response_builder
@@ -572,10 +622,34 @@ class FallbackIntentHandler(AbstractRequestHandler):
 
     def handle(self, handler_input):
         logger.info("In FallbackIntentHandler")
-        speech = "Hmm, I'm not sure. You can say Hello or Help. What would you like to do?"
-        reprompt = "I didn't catch that. What can I help you with?"
+        speak_out = "I didn't catch that. "
+        session = attributes_of(handler_input)
+        if SESSION_GOAL in session:
+            if session[SESSION_GOAL] == SEND_MESSAGE_GOAL:
+                speak_out += "I think you want to send a message. "
+                if SESSION_LAST_REQUEST in session:
+                    if session[SESSION_LAST_REQUEST] == SESSION_LOCATION:
+                        speak_out += "Where would you like to send it?"
+                    elif session[SESSION_LAST_REQUEST] == LAST_REQUEST_MESSAGE:
+                        speak_out += "What would you like to say?"
+                    elif session[SESSION_LAST_REQUEST] == LAST_REQUEST_CONFIRM:
+                        message = session[SESSION_MESSAGE]
+                        speak_out += f"This is what I have: {message}... Would you like to send it?"
+                else:
+                    speak_out += "Where would you like to send it?"
+            elif session[SESSION_GOAL] == READ_MESSAGE_GOAL:
+                speak_out += "I think you want me to read message. "
+                if SESSION_LAST_REQUEST[SESSION_LAST_REQUEST] == LAST_REQUEST_LOCATION:
+                    speak_out += " What channel do you want me to read messages from?"
+                if SESSION_LAST_REQUEST[SESSION_LAST_REQUEST] == LAST_REQUEST_NUMBER:
+                    num_items = len(session[SESSION_ITEMS])
+                    channel = session[SESSION_LOCATION]
+                    speak_out += f" There are {num_items} messages in {channel}. How many would you like me to read?"
+        else:
+            speak_out += INFO_MESSAGE
 
-        return handler_input.response_builder.speak(speech).ask(reprompt).response
+
+        return handler_input.response_builder.speak(speak_out).ask(speak_out).response
 
 class SessionEndedRequestHandler(AbstractRequestHandler):
     """Handler for Session End."""
@@ -655,6 +729,7 @@ sb.add_request_handler(ConfirmMessageYesIntentHandler())
 sb.add_request_handler(ReadMessageIntentHandler())
 sb.add_request_handler(ReadMessageProvideNumberIntentHandler())
 sb.add_request_handler(ReadMessageProvideTimeBoundingIntentHandler())
+sb.add_request_handler(ReadMessageLocationIntentHandler())
 sb.add_request_handler(HelpIntentHandler())
 sb.add_request_handler(CancelOrStopIntentHandler())
 sb.add_request_handler(FallbackIntentHandler())
