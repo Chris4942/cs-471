@@ -152,6 +152,11 @@ def send_message(channel, message):
         "text": message,
     }, headers=HEADERS).json()
 
+class ChannelNotFoundException(Exception):
+    def __init__(self, message):
+        super(ChannelNotFoundException, self)
+        self.message = message
+
 def get_messages(conversation_id, start_time, end_time):
     url = f"https://slack.com/api/conversations.history?channel={conversation_id}"
     if start_time != None:
@@ -160,7 +165,10 @@ def get_messages(conversation_id, start_time, end_time):
         url += f"&latest={end_time}"
     logger.info(f"getting messages from url: {url}")
     json_body = get(url, headers=HEADERS).json()
-    logger.info(f"json_body: {json_body}")
+    logger.info(f"messages response body: {json_body}")
+
+    if json_body['error'] == 'channel_not_found':
+        raise ChannelNotFoundException(f"Unable to find channel with id {conversation_id}")
     
     return filter(
         lambda item: "subtype" not in item,
@@ -194,7 +202,7 @@ class LaunchRequestHandler(AbstractRequestHandler):
 
     def handle(self, handler_input):
         # type: (HandlerInput) -> Response
-        speak_output = "Welcome, you can ask me to send a message to someone for you. That's all for now."
+        speak_output = "Welcome, you can ask me to send a message to someone for you or you can ask me to read messages from a channel or user. What would you like me to do?"
 
         return (
             handler_input.response_builder
@@ -512,10 +520,10 @@ class ReadMessageProvideTimeBoundingIntentHandler(AbstractRequestHandler):
 
         speak_output=""
         if len(items) > MAX_MESSAGE_READOUT:
-                attributes_of(handler_input)[SESSION_LAST_REQUEST] = LAST_REQUEST_NUMBER
-                attributes_of(handler_input)[SESSION_LAST_HANDLER] = ReadMessageIntentHandler.LAST_HANDLER_VALUE
-                attributes_of(handler_input)[SESSION_ITEMS] = items
-                speak_output = f"I found {len(items)} messages. How many recent messages would you like me to read?"
+            attributes_of(handler_input)[SESSION_LAST_REQUEST] = LAST_REQUEST_NUMBER
+            attributes_of(handler_input)[SESSION_LAST_HANDLER] = ReadMessageIntentHandler.LAST_HANDLER_VALUE
+            attributes_of(handler_input)[SESSION_ITEMS] = items
+            speak_output = f"I found {len(items)} messages. How many recent messages would you like me to read?"
         else:
             for item in items:
                 user = get_user(item['user_id'])['real_name']
@@ -620,6 +628,20 @@ class CatchAllExceptionHandler(AbstractExceptionHandler):
                 .response
         )
 
+class ChannelNotFoundExceptionHandler(AbstractExceptionHandler):
+    def can_handle(self, handler_input, exception):
+        return isinstance(exception, ChannelNotFoundException)
+    
+    def handle(self, handler_input, exception):
+        speak_output = f"Sorry, I wasn't able to find that channel. I am not able to read messages recieved directly from a user. See Project Write Up Limitations for more details."
+
+        return (
+            handler_input.response_builder
+                .speak(speak_output)
+                .ask(speak_output)
+                .response
+        )
+
 sb = SkillBuilder()
 
 sb.add_request_handler(LaunchRequestHandler())
@@ -639,5 +661,6 @@ sb.add_request_handler(FallbackIntentHandler())
 sb.add_request_handler(SessionEndedRequestHandler())
 sb.add_request_handler(IntentReflectorHandler()) # make sure IntentReflectorHandler is last so it doesn't override your custom intent handlers
 
+sb.add_exception_handler(ChannelNotFoundExceptionHandler())
 sb.add_exception_handler(CatchAllExceptionHandler())
 lambda_handler = sb.lambda_handler()
