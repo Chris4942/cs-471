@@ -213,7 +213,7 @@ class LaunchRequestHandler(AbstractRequestHandler):
 
     def handle(self, handler_input):
         # type: (HandlerInput) -> Response
-        speak_output = "Welcome, you can ask me to send a message to someone for you or you can ask me to read messages from a channel. What would you like me to do?"
+        speak_output = "Welcome, you can ask me to send a message to someone or to a channel for you, or you can ask me to read messages from a channel. What would you like me to do?"
 
         return (
             handler_input.response_builder
