@@ -229,7 +229,7 @@ class ConfirmMessageNoIntentHandler(AbstractRequestHandler):
         return response
 
 def wrap_draft(draft):
-    return f"Here's your message: \"{draft}\"\nShould I send it to?"
+    return f"Here's your message: \"{draft}\"\nWho should I send it to?"
 
 class DraftMessageIntentHandler(AbstractRequestHandler):
     def can_handle(self, handler_input):
