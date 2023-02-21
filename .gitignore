@@ -1,2 +1,5 @@
 .vscode/
 credentials
+slack-secretary/lambda/secrets.py
+secrets.env
+**/*__pycache__/
