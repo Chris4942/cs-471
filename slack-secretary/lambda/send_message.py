@@ -33,7 +33,7 @@ from constants import (
     LAST_REQUEST_CONFIRM,
     SESSION_MESSAGE,
 )
-import open_api_client
+import open_ai_client
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -237,7 +237,7 @@ class DraftMessageIntentHandler(AbstractRequestHandler):
         prompt = slots_of(handler_input)[SLOT_PROMPT]
         attributes_of(handler_input)[SESSION_PROMPT] = prompt
 
-        draft = open_api_client.draft_message(prompt)
+        draft = open_ai_client.draft_message(prompt)
         attributes_of(handler_input)[SESSION_MESSAGE] = draft
 
         speak_output = f"Here's your message: {draft}\nWho should I send it to?"
