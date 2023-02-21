@@ -10,9 +10,9 @@ from constants import INFO_MESSAGE
 
 from read_messages import ReadMessageIntentHandler, ReadMessageLocationIntentHandler, ReadMessageProvideNumberIntentHandler, ReadMessageProvideTimeBoundingIntentHandler
 
-from send_message import ConfirmMessageNoIntentHandler, ConfirmMessageYesIntentHandler, SendMessageIntentCatcher, SendMessageIntentHandler, SendMessageLocationIntentHandler, SendMessageMessageHandler
+from send_message import ConfirmMessageNoIntentHandler, ConfirmMessageYesIntentHandler, DraftMessageIntentHandler, SendMessageIntentCatcher, SendMessageIntentHandler, SendMessageLocationIntentHandler, SendMessageMessageHandler
 
-from utils import attributes_of, is_intent_name
+from utils import ChannelNotFoundException, attributes_of, is_intent_name
 import ask_sdk_core.utils as ask_utils
 import re
 
@@ -210,6 +210,7 @@ sb.add_request_handler(ReadMessageIntentHandler())
 sb.add_request_handler(ReadMessageProvideNumberIntentHandler())
 sb.add_request_handler(ReadMessageProvideTimeBoundingIntentHandler())
 sb.add_request_handler(ReadMessageLocationIntentHandler())
+sb.add_request_handler(DraftMessageIntentHandler())
 sb.add_request_handler(HelpIntentHandler())
 sb.add_request_handler(CancelOrStopIntentHandler())
 sb.add_request_handler(FallbackIntentHandler())

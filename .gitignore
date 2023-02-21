@@ -3,3 +3,4 @@ credentials
 slack-secretary/lambda/secrets.py
 secrets.env
 **/*__pycache__/
+slack-secretary/deployment.zip

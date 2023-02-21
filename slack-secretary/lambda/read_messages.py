@@ -108,7 +108,8 @@ def compile_items_into_speak_output(items):
 class ReadMessageProvideNumberIntentHandler(AbstractRequestHandler):
     def can_handle(self, handler_input):
         return (
-            attributes_of(handler_input)[SESSION_LAST_REQUEST] == LAST_REQUEST_NUMBER
+            SESSION_LAST_REQUEST in attributes_of(handler_input) 
+            and attributes_of(handler_input)[SESSION_LAST_REQUEST] == LAST_REQUEST_NUMBER
             and (
                 is_intent_name(PROVIDE_NUMBER_INTENT)(handler_input)
                 or is_intent_name(ALL_INTENT)
@@ -137,7 +138,9 @@ class ReadMessageProvideNumberIntentHandler(AbstractRequestHandler):
 class ReadMessageProvideTimeBoundingIntentHandler(AbstractRequestHandler):
     def can_handle(self, handler_input):
         return (
-            attributes_of(handler_input)[SESSION_LAST_REQUEST] == LAST_REQUEST_NUMBER
+            SESSION_LAST_REQUEST in attributes_of(handler_input)
+            and attributes_of(handler_input)[SESSION_LAST_REQUEST] == LAST_REQUEST_NUMBER
+            and SESSION_LAST_HANDLER in attributes_of(handler_input)
             and attributes_of(handler_input)[SESSION_LAST_HANDLER] == ReadMessageIntentHandler.LAST_HANDLER_VALUE
             and is_intent_name("ProvideTimeBoundingIntent")(handler_input)
         )

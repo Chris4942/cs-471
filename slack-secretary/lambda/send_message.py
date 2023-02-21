@@ -17,8 +17,10 @@ from constants import (
     AMAZON_CANCEL_INTENT,
     AMAZON_STOP_INTENT,
     PROVIDE_MESSAGE_INTENT,
+    SESSION_PROMPT,
     SLOT_LOCATION,
     SLOT_MESSAGE,
+    SLOT_PROMPT,
     SLOT_TELL_MESSAGE,
     SLOT_COMPLEX_LOCATION,
     SESSION_GOAL,
@@ -31,6 +33,7 @@ from constants import (
     LAST_REQUEST_CONFIRM,
     SESSION_MESSAGE,
 )
+import open_api_client
 
 logger = logging.getLogger(__name__)
 logger.setLevel(logging.INFO)
@@ -96,12 +99,18 @@ class SendMessageLocationIntentHandler(AbstractRequestHandler):
         return self.last_request_was_location(handler_input) and is_intent_name("ProvideLocationIntent")(handler_input)
 
     def handle(self, handler_input):
-        location = slots_of(handler_input)[SLOT_LOCATION].value
-        attributes_of(handler_input)[SESSION_LOCATION] = location
-        speak_output = f"What would you like to say to {location}?"
-        attributes_of(handler_input)[SESSION_LAST_REQUEST] = LAST_REQUEST_MESSAGE
-
         attributes_of(handler_input)[SESSION_LAST_HANDLER] = SendMessageLocationIntentHandler.LAST_HANDLER_VALUE
+        location = slots_of(handler_input)[SLOT_LOCATION].value
+        member, _ = resolve_name_location(location)
+        attributes_of(handler_input)[SESSION_LOCATION] = member
+        if SESSION_GOAL not in attributes_of(handler_input):
+            attributes_of(handler_input)[SESSION_LAST_REQUEST] = LAST_REQUEST_MESSAGE
+            speak_output = f"What would you like to say to {location}?"
+        else:
+            message = attributes_of(handler_input)[SESSION_MESSAGE]
+            speak_output = message_confirmation_string(member, message)
+            attributes_of(handler_input)[SESSION_LAST_REQUEST] = LAST_REQUEST_CONFIRM
+
         return (
             handler_input.response_builder
                 .speak(speak_output)
@@ -218,3 +227,25 @@ class ConfirmMessageNoIntentHandler(AbstractRequestHandler):
             )
         attributes_of(handler_input)[SESSION_LAST_HANDLER] = ConfirmMessageNoIntentHandler.LAST_HANDLER_VALUE
         return response
+
+class DraftMessageIntentHandler(AbstractRequestHandler):
+    def can_handle(self, handler_input):
+        return is_intent_name("DraftMessageIntent")(handler_input)
+    
+    def handle(self, handler_input):
+        attributes_of(handler_input)[SESSION_GOAL] = SEND_MESSAGE_GOAL
+        prompt = slots_of(handler_input)[SLOT_PROMPT]
+        attributes_of(handler_input)[SESSION_PROMPT] = prompt
+
+        draft = open_api_client.draft_message(prompt)
+        attributes_of(handler_input)[SESSION_MESSAGE] = draft
+
+        speak_output = f"Here's your message: {draft}\nWho should I send it to?"
+        attributes_of(handler_input)[SESSION_LAST_REQUEST] = LAST_REQUEST_LOCATION
+
+        return (
+            handler_input.response_builder
+            .speak(speak_output)
+            .ask(speak_output)
+            .response
+        )
