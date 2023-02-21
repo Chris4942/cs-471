@@ -6,11 +6,11 @@
 # This sample is built using the handler classes approach in skill builder.
 import logging
 
-from constants import INFO_MESSAGE
+from constants import AMAZON_CANCEL_INTENT, AMAZON_STOP_INTENT, INFO_MESSAGE, LAST_REQUEST_CONFIRM, LAST_REQUEST_LOCATION, LAST_REQUEST_MESSAGE, LAST_REQUEST_NUMBER, READ_MESSAGE_GOAL, SEND_MESSAGE_GOAL, SESSION_GOAL, SESSION_ITEMS, SESSION_LAST_REQUEST, SESSION_LOCATION, SESSION_MESSAGE
 
 from read_messages import ReadMessageIntentHandler, ReadMessageLocationIntentHandler, ReadMessageProvideNumberIntentHandler, ReadMessageProvideTimeBoundingIntentHandler
 
-from send_message import ConfirmMessageNoIntentHandler, ConfirmMessageYesIntentHandler, DraftMessageIntentHandler, DraftQuestionIntentHandler, SendMessageIntentCatcher, SendMessageIntentHandler, SendMessageLocationIntentHandler, SendMessageMessageHandler
+from send_message import ConfirmMessageNoIntentHandler, ConfirmMessageYesIntentHandler, DraftMessageIntentHandler, DraftQuestionIntentHandler, DraftReplyIntentHandler, SendMessageIntentCatcher, SendMessageIntentHandler, SendMessageLocationIntentHandler, SendMessageMessageHandler
 
 from utils import ChannelNotFoundException, attributes_of, is_intent_name
 import ask_sdk_core.utils as ask_utils
@@ -59,6 +59,8 @@ class GetSessionIntent(AbstractRequestHandler):
     def handle(self, handler_input):
         session_attr = attributes_of(handler_input)
         speak_output = json.dumps(session_attr)
+        logger.info(f"Session Data: {speak_output}")
+        speak_output = "placeholder"
         return (
             handler_input.response_builder
                 .speak(speak_output)
@@ -103,30 +105,30 @@ class FallbackIntentHandler(AbstractRequestHandler):
     def handle(self, handler_input):
         logger.info("In FallbackIntentHandler")
         speak_out = "I didn't catch that. "
-        session = attributes_of(handler_input)
-        if SESSION_GOAL in session:
-            if session[SESSION_GOAL] == SEND_MESSAGE_GOAL:
-                speak_out += "I think you want to send a message. "
-                if SESSION_LAST_REQUEST in session:
-                    if session[SESSION_LAST_REQUEST] == SESSION_LOCATION:
-                        speak_out += "Where would you like to send it?"
-                    elif session[SESSION_LAST_REQUEST] == LAST_REQUEST_MESSAGE:
-                        speak_out += "What would you like to say?"
-                    elif session[SESSION_LAST_REQUEST] == LAST_REQUEST_CONFIRM:
-                        message = session[SESSION_MESSAGE]
-                        speak_out += f"This is what I have: {message}... Would you like to send it?"
-                else:
-                    speak_out += "Where would you like to send it?"
-            elif session[SESSION_GOAL] == READ_MESSAGE_GOAL:
-                speak_out += "I think you want me to read message. "
-                if SESSION_LAST_REQUEST[SESSION_LAST_REQUEST] == LAST_REQUEST_LOCATION:
-                    speak_out += " What channel do you want me to read messages from?"
-                if SESSION_LAST_REQUEST[SESSION_LAST_REQUEST] == LAST_REQUEST_NUMBER:
-                    num_items = len(session[SESSION_ITEMS])
-                    channel = session[SESSION_LOCATION]
-                    speak_out += f" There are {num_items} messages in {channel}. How many would you like me to read?"
-        else:
-            speak_out += INFO_MESSAGE
+        # session = attributes_of(handler_input)
+        # if SESSION_GOAL in session:
+        #     if session[SESSION_GOAL] == SEND_MESSAGE_GOAL:
+        #         speak_out += "I think you want to send a message. "
+        #         if SESSION_LAST_REQUEST in session:
+        #             if session[SESSION_LAST_REQUEST] == SESSION_LOCATION:
+        #                 speak_out += "Where would you like to send it?"
+        #             elif session[SESSION_LAST_REQUEST] == LAST_REQUEST_MESSAGE:
+        #                 speak_out += "What would you like to say?"
+        #             elif session[SESSION_LAST_REQUEST] == LAST_REQUEST_CONFIRM:
+        #                 message = session[SESSION_MESSAGE]
+        #                 speak_out += f"This is what I have: {message}... Would you like to send it?"
+        #         else:
+        #             speak_out += "Where would you like to send it?"
+        #     elif session[SESSION_GOAL] == READ_MESSAGE_GOAL:
+        #         speak_out += "I think you want me to read message. "
+        #         if SESSION_LAST_REQUEST[SESSION_LAST_REQUEST] == LAST_REQUEST_LOCATION:
+        #             speak_out += " What channel do you want me to read messages from?"
+        #         if SESSION_LAST_REQUEST[SESSION_LAST_REQUEST] == LAST_REQUEST_NUMBER:
+        #             num_items = len(session[SESSION_ITEMS])
+        #             channel = session[SESSION_LOCATION]
+        #             speak_out += f" There are {num_items} messages in {channel}. How many would you like me to read?"
+        # else:
+        #     speak_out += INFO_MESSAGE
 
 
         return handler_input.response_builder.speak(speak_out).ask(speak_out).response
@@ -206,6 +208,7 @@ sb.add_request_handler(SendMessageMessageHandler())
 sb.add_request_handler(SendMessageIntentCatcher())
 sb.add_request_handler(ConfirmMessageNoIntentHandler())
 sb.add_request_handler(ConfirmMessageYesIntentHandler())
+sb.add_request_handler(DraftReplyIntentHandler())
 sb.add_request_handler(ReadMessageIntentHandler())
 sb.add_request_handler(ReadMessageProvideNumberIntentHandler())
 sb.add_request_handler(ReadMessageProvideTimeBoundingIntentHandler())

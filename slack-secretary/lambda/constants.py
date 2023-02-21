@@ -28,6 +28,7 @@ SESSION_LAST_HANDLER = 'lastHandler'
 SESSION_ITEMS = 'items'
 SESSION_CONVERSATION_ID = 'sessionConversationId'
 SESSION_PROMPT = 'prompt'
+SESSION_LAST_MESSAGE_READ = 'lastMessageRead'
 
 MESSAGE_REQUEST = 'messageRequest'
 SEND_MESSAGE_GOAL = 'sendMessage'

@@ -17,6 +17,7 @@ from constants import (
     AMAZON_CANCEL_INTENT,
     AMAZON_STOP_INTENT,
     PROVIDE_MESSAGE_INTENT,
+    SESSION_LAST_MESSAGE_READ,
     SESSION_PROMPT,
     SLOT_LOCATION,
     SLOT_MESSAGE,
@@ -268,6 +269,32 @@ class DraftQuestionIntentHandler(AbstractRequestHandler):
         speak_output = wrap_draft(draft)
         attributes_of(handler_input)[SESSION_LAST_REQUEST] = LAST_REQUEST_LOCATION
 
+        return (
+            handler_input.response_builder
+            .speak(speak_output)
+            .ask(speak_output)
+            .response
+        )
+
+class DraftReplyIntentHandler(AbstractRequestHandler):
+    def can_handle(self, handler_input):
+        logger.info("checking if DraftReplyIntentHandler can respond...")
+        return (
+            # SESSION_LAST_MESSAGE_READ in attributes_of(handler_input)
+            is_intent_name("DraftReplyIntent")(handler_input)
+        )
+    
+    def handle(self, handler_input):
+        logger.info("Drafting Reply...")
+        attributes_of(handler_input)[SESSION_GOAL] = SEND_MESSAGE_GOAL
+        prompt = attributes_of(handler_input)[SESSION_LAST_MESSAGE_READ]
+
+        draft = open_ai_client.draft_reply(prompt)
+        attributes_of(handler_input)[SESSION_MESSAGE] = draft
+
+        speak_output = wrap_draft(draft)
+
+        attributes_of(handler_input)[SESSION_LAST_REQUEST] = LAST_REQUEST_LOCATION
         return (
             handler_input.response_builder
             .speak(speak_output)

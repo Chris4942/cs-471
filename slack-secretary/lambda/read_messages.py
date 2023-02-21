@@ -2,7 +2,7 @@
 
 import logging
 
-from constants import ALL_INTENT, LAST_REQUEST_LOCATION, LAST_REQUEST_NUMBER, MAX_MESSAGE_READOUT, PROVIDE_NUMBER_INTENT, READ_MESSAGE_GOAL, SESSION_CONVERSATION_ID, SESSION_GOAL, SESSION_ITEMS, SESSION_LAST_HANDLER, SESSION_LAST_REQUEST, SLOT_END_DATE, SLOT_END_TIME, SLOT_LOCATION, SLOT_NUMBER, SLOT_START_DATE, SLOT_START_TIME
+from constants import ALL_INTENT, LAST_REQUEST_LOCATION, LAST_REQUEST_NUMBER, MAX_MESSAGE_READOUT, PROVIDE_NUMBER_INTENT, READ_MESSAGE_GOAL, SESSION_CONVERSATION_ID, SESSION_GOAL, SESSION_ITEMS, SESSION_LAST_HANDLER, SESSION_LAST_MESSAGE_READ, SESSION_LAST_REQUEST, SLOT_END_DATE, SLOT_END_TIME, SLOT_LOCATION, SLOT_NUMBER, SLOT_START_DATE, SLOT_START_TIME
 
 
 from ask_sdk_core.dispatch_components import AbstractRequestHandler
@@ -58,7 +58,7 @@ class ReadMessageIntentHandler(AbstractRequestHandler):
                 attributes_of(handler_input)[SESSION_CONVERSATION_ID] = source['id']
                 speak_output = f"I found {len(items)} messages. How many recent messages would you like me to read or what time range would you like to me to read messages in?"
             else:
-                speak_output = compile_items_into_speak_output(items)
+                speak_output = compile_items_into_speak_output(items, handler_input)
         else:
             speak_output = "What channel would you like me to read messages from?"
             attributes_of(handler_input)[SESSION_LAST_REQUEST] = LAST_REQUEST_LOCATION
@@ -76,6 +76,7 @@ class ReadMessageLocationIntentHandler(AbstractRequestHandler):
         return (
             SESSION_LAST_REQUEST in attributes_of(handler_input) 
             and attributes_of(handler_input)[SESSION_LAST_REQUEST] == LAST_REQUEST_LOCATION
+            and SESSION_GOAL in attributes_of(handler_input)
             and attributes_of(handler_input)[SESSION_GOAL] == READ_MESSAGE_GOAL
         )
 
@@ -89,7 +90,7 @@ class ReadMessageLocationIntentHandler(AbstractRequestHandler):
             attributes_of(handler_input)[SESSION_CONVERSATION_ID] = source['id']
             speak_output = f"I found {len(items)} messages. How many recent messages would you like me to read or what time range would you like to me to read messages in?"
         else:
-            speak_output = compile_items_into_speak_output(items)
+            speak_output = compile_items_into_speak_output(items, handler_input)
         attributes_of(handler_input)[SESSION_LAST_HANDLER] = ReadMessageLocationIntentHandler.LAST_HANDLER_VALUE
         return (
             handler_input.response_builder
@@ -98,11 +99,13 @@ class ReadMessageLocationIntentHandler(AbstractRequestHandler):
                 .response
         )
 
-def compile_items_into_speak_output(items):
+def compile_items_into_speak_output(items, handler_input):
     speak_output = ""
     for item in reversed(items):
         user = get_user(item['user_id'])['real_name']
         speak_output = f"{speak_output} {user} said \"{item['message']}\"."
+        attributes_of(handler_input)[SESSION_LAST_MESSAGE_READ] = item['message']
+        logger.info(f"type of last message read: {type(attributes_of(handler_input)[SESSION_LAST_MESSAGE_READ])}")
     return speak_output
 
 class ReadMessageProvideNumberIntentHandler(AbstractRequestHandler):
@@ -125,9 +128,8 @@ class ReadMessageProvideNumberIntentHandler(AbstractRequestHandler):
         if number == None:
             raise Exception("I don't know how this happened, but I certainly didn't prepare for it")
         logger.info(f"number type: {type(number)}")
-        logger.info(f"items: {items[len(items) - number:]}")
         items = items[len(items) - number:]
-        speak_output = compile_items_into_speak_output(items)
+        speak_output = compile_items_into_speak_output(items, handler_input)
         return (
             handler_input.response_builder
                 .speak(speak_output)
@@ -167,7 +169,7 @@ class ReadMessageProvideTimeBoundingIntentHandler(AbstractRequestHandler):
             attributes_of(handler_input)[SESSION_ITEMS] = items
             speak_output = f"I found {len(items)} messages. How many recent messages would you like me to read?"
         else:
-            speak_output = compile_items_into_speak_output(items)
+            speak_output = compile_items_into_speak_output(items, handler_input)
         
         return (
             handler_input.response_builder

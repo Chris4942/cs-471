@@ -26,3 +26,12 @@ def draft_question(prompt: str) -> str:
         max_tokens = 100,
     )
     return gpt3_response.choices[0].text
+
+def draft_reply(prompt: str) -> str:
+    gpt3_response = openai.Completion.create(
+        model="text-davinci-003",
+        prompt=f"Polite Conversation... Me: {prompt}\nYou: ",
+        temperature=1.0,
+        max_tokens = 100,
+    )
+    return gpt3_response.choices[0].text
