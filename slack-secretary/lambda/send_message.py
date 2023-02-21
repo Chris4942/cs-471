@@ -228,6 +228,9 @@ class ConfirmMessageNoIntentHandler(AbstractRequestHandler):
         attributes_of(handler_input)[SESSION_LAST_HANDLER] = ConfirmMessageNoIntentHandler.LAST_HANDLER_VALUE
         return response
 
+def wrap_draft(draft):
+    return f"Here's your message: \"{draft}\"\nShould I send it to?"
+
 class DraftMessageIntentHandler(AbstractRequestHandler):
     def can_handle(self, handler_input):
         return is_intent_name("DraftMessageIntent")(handler_input)
@@ -240,7 +243,29 @@ class DraftMessageIntentHandler(AbstractRequestHandler):
         draft = open_ai_client.draft_message(prompt)
         attributes_of(handler_input)[SESSION_MESSAGE] = draft
 
-        speak_output = f"Here's your message: {draft}\nWho should I send it to?"
+        speak_output = wrap_draft(draft)
+        attributes_of(handler_input)[SESSION_LAST_REQUEST] = LAST_REQUEST_LOCATION
+
+        return (
+            handler_input.response_builder
+            .speak(speak_output)
+            .ask(speak_output)
+            .response
+        )
+
+class DraftQuestionIntentHandler(AbstractRequestHandler):
+    def can_handle(self, handler_input):
+        return is_intent_name("DraftQuestionIntent")(handler_input)
+    
+    def handle(self, handler_input):
+        attributes_of(handler_input)[SESSION_GOAL] = SEND_MESSAGE_GOAL
+        prompt = slots_of(handler_input)[SLOT_PROMPT]
+        attributes_of(handler_input)[SESSION_PROMPT] = prompt
+
+        draft = open_ai_client.draft_question(prompt)
+        attributes_of(handler_input)[SESSION_MESSAGE] = draft
+
+        speak_output = wrap_draft(draft)
         attributes_of(handler_input)[SESSION_LAST_REQUEST] = LAST_REQUEST_LOCATION
 
         return (
