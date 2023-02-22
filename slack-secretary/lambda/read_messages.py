@@ -115,7 +115,7 @@ class ReadMessageProvideNumberIntentHandler(AbstractRequestHandler):
             and attributes_of(handler_input)[SESSION_LAST_REQUEST] == LAST_REQUEST_NUMBER
             and (
                 is_intent_name(PROVIDE_NUMBER_INTENT)(handler_input)
-                or is_intent_name(ALL_INTENT)
+                or is_intent_name(ALL_INTENT)(handler_input)
             )
         )
     
